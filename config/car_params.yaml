@@ -1,0 +1,8 @@
+imu_topic: "/imu/data"
+steering_topic: "/steering_angle"
+
+iz: .0398378 # kg m^2
+mass: 3.17 # kg
+wheelbase: 0.3302 # m
+l_r: 0.1651 # distance between center of gravity and rear axle (m)
+l_f: 0.1651 # distance between center of gravity and front axle (m)
