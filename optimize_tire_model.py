@@ -6,6 +6,7 @@ import yaml
 from scipy.optimize import minimize
 
 from sensor_msgs.msg import Imu
+from ackermann_msgs.msg import AckermannDriveStamped
 from rosidl_runtime_py.utilities import get_message
 from rclpy.serialization import deserialize_message
 
@@ -14,8 +15,8 @@ with open("config/car_params.yaml", "r") as f:
 
 
 # Define the Pacejka tire model
-def pacejka(D, C, B, alpha):
-    return D * np.sin(C * np.arctan(B * alpha))
+def pacejka(D, C, B, alphas):
+    return D * np.sin(C * np.arctan(B * alphas))
 
 
 # Define the slip angle
@@ -34,7 +35,7 @@ def objective(D, C, B, alphas, Fys: np.ndarray):
 def optimize(data):
     reader = rosbag2_py.SequentialReader()
 
-    storage_options, converter_options = get_rosbag_options(data, 'sqlite3')
+    storage_options, converter_options = get_rosbag_options(data, "sqlite3")
     reader.open(storage_options, converter_options)
 
     # Load params
@@ -47,12 +48,6 @@ def optimize(data):
     imu_topic = params["imu_topic"]
     steering_topic = params["steering_topic"]
 
-    # Initialize the parameters
-    D = 1.0
-    C = 1.0
-    B = 1.0
-
-    # Initialize the arrays to store the data
     topic_types = reader.get_all_topics_and_types()
     type_map = {
         topic_types[i].name: topic_types[i].type for i in range(len(topic_types))
@@ -64,7 +59,7 @@ def optimize(data):
     deltas = []
 
     while reader.has_next():
-        (topic, data, t) = reader.read_next()
+        (topic, data, _) = reader.read_next()
 
         if topic == imu_topic:
             msg_type = get_message(type_map[topic])
@@ -93,6 +88,9 @@ def optimize(data):
     rs = np.array(rs)
     deltas = np.array(deltas)
 
+    print(rs.shape, a_ys.shape, deltas.shape)
+    deltas = np.zeros(len(rs))
+
     # Calculate sideslip angles
     betas = np.arctan((l_r / (l_f + l_r)) * np.tan(deltas))
     alphas = np.zeros(len(betas))
@@ -100,11 +98,12 @@ def optimize(data):
     # Calculate the lateral forces
     Fys = (i_z * rs + l_f * m * a_ys) / (wheelbase * np.cos(deltas))
 
-    # Optimize the parameters
+    # [D, C, B]
+    x0 = [1.0, 1.9, 10.0]
+
     result = minimize(
         lambda x: objective(x[0], x[1], x[2], alphas, Fys),
-        [D, C, B],
-        bounds=[(0, None), (0, None), (0, None)],
+        x0
     )
 
     D, C, B = result.x
@@ -112,5 +111,5 @@ def optimize(data):
     print(f"D: {D}, C: {C}, B: {B}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     optimize()
