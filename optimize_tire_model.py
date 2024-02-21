@@ -4,6 +4,7 @@ import rosbag2_py
 from lib.bag import get_rosbag_options
 import yaml
 from scipy.optimize import minimize
+from scipy.integrate import cumulative_trapezoid
 
 from sensor_msgs.msg import Imu
 from ackermann_msgs.msg import AckermannDriveStamped
@@ -20,14 +21,30 @@ def pacejka(D, C, B, alphas):
 
 
 # Define the slip angle
-def slip_angle(v_xs: np.ndarray, rs: np.ndarray, deltas: np.ndarray, beta, l_f):
-    return np.arctan(beta + (l_f * rs) / v_xs) - deltas
+def slip_angle(v_xs: np.ndarray, rs: np.ndarray, deltas: np.ndarray, betas: np.ndarray, l_f):
+    return np.arctan(betas + (l_f * rs) / v_xs) - deltas
 
 
 # We want to minimize the sum of the squared differences between
 # the measured lateral force and the model's lateral force
-def objective(D, C, B, alphas, Fys: np.ndarray):
+def objective(D, C, B, alphas: np.ndarray, Fys: np.ndarray):
     return np.sum((Fys - pacejka(D, C, B, alphas)) ** 2)
+
+
+def lerp(t1, t2, v2):
+    lerped_vals = np.zeros_like(t1)
+
+    for i, t in enumerate(t1):
+        idx = np.searchsorted(t2, t, side="right") - 1
+
+        if idx < 0:
+            lerped_vals[i] = v2[0]
+        elif idx >= len(t2) - 1:
+            lerped_vals[i] = v2[-1]
+        else:
+            lerped_vals[i] = v2[idx] + (v2[idx + 1] - v2[idx]) * (t - t2[idx]) / (t2[idx + 1] - t2[idx])
+
+    return lerped_vals
 
 
 @click.command()
@@ -56,7 +73,10 @@ def optimize(data):
     a_xs = []
     a_ys = []
     rs = []
+    t_imu = []
+
     deltas = []
+    t_delta = []
 
     while reader.has_next():
         (topic, data, _) = reader.read_next()
@@ -70,33 +90,42 @@ def optimize(data):
             a_x = imu_msg.linear_acceleration.x
             a_y = imu_msg.linear_acceleration.y
             r = imu_msg.angular_velocity.z
+            t = imu_msg.header.stamp.sec + imu_msg.header.stamp.nanosec * 1e-9
 
             a_xs.append(a_x)
             a_ys.append(a_y)
             rs.append(r)
+            t_imu.append(t)
 
         if topic == steering_topic:
             msg_type = get_message(type_map[topic])
             steering_msg = deserialize_message(data, msg_type)
 
+            assert isinstance(steering_msg, AckermannDriveStamped)
+
+            t = steering_msg.header.stamp.sec + steering_msg.header.stamp.nanosec * 1e-9
             delta = steering_msg.drive.steering_angle
+            
             deltas.append(delta)
+            t_delta.append(t)
 
     # Convert the lists to numpy arrays
     a_xs = np.array(a_xs)
     a_ys = np.array(a_ys)
     rs = np.array(rs)
-    deltas = np.array(deltas)
 
-    print(rs.shape, a_ys.shape, deltas.shape)
-    deltas = np.zeros(len(rs))
+    rdots = np.gradient(rs, t_imu)
+    v_xs = cumulative_trapezoid(a_xs, t_imu, initial=0)
+
+    deltas = np.array(deltas)
+    deltas = lerp(t_imu, t_delta, deltas)
 
     # Calculate sideslip angles
     betas = np.arctan((l_r / (l_f + l_r)) * np.tan(deltas))
-    alphas = np.zeros(len(betas))
+    alphas = slip_angle(v_xs, rs, deltas, betas, l_f)
 
     # Calculate the lateral forces
-    Fys = (i_z * rs + l_f * m * a_ys) / (wheelbase * np.cos(deltas))
+    Fys = (i_z * rdots + l_f * m * a_ys) / (wheelbase * np.cos(deltas))
 
     # [D, C, B]
     x0 = [1.0, 1.9, 10.0]
