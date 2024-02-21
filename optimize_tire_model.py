@@ -1,15 +1,18 @@
 import click
-import numpy as np
-import rosbag2_py
-from lib.bag import get_rosbag_options
 import yaml
+import numpy as np
+
 from scipy.optimize import minimize
 from scipy.integrate import cumulative_trapezoid
 
-from sensor_msgs.msg import Imu
-from ackermann_msgs.msg import AckermannDriveStamped
+import rosbag2_py
+from lib.bag import get_rosbag_options
 from rosidl_runtime_py.utilities import get_message
 from rclpy.serialization import deserialize_message
+from sensor_msgs.msg import Imu
+from ackermann_msgs.msg import AckermannDriveStamped
+
+import matplotlib.pyplot as plt
 
 with open("config/car_params.yaml", "r") as f:
     params = yaml.safe_load(f)
@@ -47,6 +50,23 @@ def lerp(t1, t2, v2):
     return lerped_vals
 
 
+def plot_func(D, C, B):
+    func = lambda a: D * np.sin(C * np.arctan(B * a))
+
+    _, ax = plt.subplots(figsize=(15, 10))
+    x = np.linspace(-5, 5, 1000)
+    y = func(x)
+    l, = ax.plot(x, y, 'b-')
+
+    ax.title.set_text('Optimized Pacejka Model')
+    ax.set_xlabel('Slip Angle (rad)')
+    ax.set_ylabel('Lateral Force (N)')
+    ax.grid(True)
+    ax.set_xticks(np.arange(-5, 6, 1))
+    
+    plt.show()
+
+
 @click.command()
 @click.argument("data", type=click.Path(exists=True))
 def optimize(data):
@@ -77,6 +97,8 @@ def optimize(data):
 
     deltas = []
     t_delta = []
+
+    print("Reading data...")
 
     while reader.has_next():
         (topic, data, _) = reader.read_next()
@@ -125,10 +147,12 @@ def optimize(data):
     alphas = slip_angle(v_xs, rs, deltas, betas, l_f)
 
     # Calculate the lateral forces
-    Fys = (i_z * rdots + l_f * m * a_ys) / (wheelbase * np.cos(deltas))
+    Fys = (i_z * rdots + l_r * m * a_ys) / (wheelbase * np.cos(deltas))
 
-    # [D, C, B]
+    # Initial guess taken from https://www.edy.es/dev/docs/pacejka-94-parameters-explained-a-comprehensive-guide/ for dry tarmac.
     x0 = [1.0, 1.9, 10.0]
+
+    print("Optimizing...")
 
     result = minimize(
         lambda x: objective(x[0], x[1], x[2], alphas, Fys),
@@ -138,6 +162,8 @@ def optimize(data):
     D, C, B = result.x
 
     print(f"D: {D}, C: {C}, B: {B}")
+
+    plot_func(D, C, B)
 
 
 if __name__ == "__main__":
