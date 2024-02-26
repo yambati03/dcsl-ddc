@@ -54,7 +54,7 @@ def plot_func(D, C, B):
     func = lambda a: D * np.sin(C * np.arctan(B * a))
 
     _, ax = plt.subplots(figsize=(15, 10))
-    x = np.linspace(-5, 5, 1000)
+    x = np.linspace(-1, 1, 1000)
     y = func(x)
     l, = ax.plot(x, y, 'b-')
 
@@ -62,18 +62,15 @@ def plot_func(D, C, B):
     ax.set_xlabel('Slip Angle (rad)')
     ax.set_ylabel('Lateral Force (N)')
     ax.grid(True)
-    ax.set_xticks(np.arange(-5, 6, 1))
+    ax.set_xticks(np.arange(-1, 1, 0.1))
     
     plt.show()
 
 
 @click.command()
-@click.argument("data", type=click.Path(exists=True))
-def optimize(data):
+@click.argument("bags", type=click.Path(exists=True), nargs=-1)
+def optimize(bags):
     reader = rosbag2_py.SequentialReader()
-
-    storage_options, converter_options = get_rosbag_options(data, "sqlite3")
-    reader.open(storage_options, converter_options)
 
     # Load params
     i_z = params["i_z"]
@@ -85,78 +82,91 @@ def optimize(data):
     imu_topic = params["imu_topic"]
     steering_topic = params["steering_topic"]
 
-    topic_types = reader.get_all_topics_and_types()
-    type_map = {
-        topic_types[i].name: topic_types[i].type for i in range(len(topic_types))
-    }
+    alphas_ = np.array([])
+    Fys_ = np.array([])
 
-    a_xs = []
-    a_ys = []
-    rs = []
-    t_imu = []
+    for bag in bags:
+        storage_options, converter_options = get_rosbag_options(bag, "sqlite3")
+        reader.open(storage_options, converter_options)
 
-    deltas = []
-    t_delta = []
+        topic_types = reader.get_all_topics_and_types()
+        type_map = {
+            topic_types[i].name: topic_types[i].type for i in range(len(topic_types))
+        }
 
-    print("Reading data...")
+        a_xs = []
+        a_ys = []
+        rs = []
+        t_imu = []
+        deltas = []
+        t_delta = []
 
-    while reader.has_next():
-        (topic, data, _) = reader.read_next()
+        while reader.has_next():
+            (topic, data, _) = reader.read_next()
 
-        if topic == imu_topic:
-            msg_type = get_message(type_map[topic])
-            imu_msg = deserialize_message(data, msg_type)
+            if topic == imu_topic:
+                msg_type = get_message(type_map[topic])
+                imu_msg = deserialize_message(data, msg_type)
 
-            assert isinstance(imu_msg, Imu)
+                assert isinstance(imu_msg, Imu)
 
-            a_x = imu_msg.linear_acceleration.x
-            a_y = imu_msg.linear_acceleration.y
-            r = imu_msg.angular_velocity.z
-            t = imu_msg.header.stamp.sec + imu_msg.header.stamp.nanosec * 1e-9
+                a_x = imu_msg.linear_acceleration.x
+                a_y = imu_msg.linear_acceleration.y
+                r = imu_msg.angular_velocity.z
+                t = imu_msg.header.stamp.sec + imu_msg.header.stamp.nanosec * 1e-9
 
-            a_xs.append(a_x)
-            a_ys.append(a_y)
-            rs.append(r)
-            t_imu.append(t)
+                a_xs.append(a_x)
+                a_ys.append(a_y)
+                rs.append(r)
+                t_imu.append(t)
 
-        if topic == steering_topic:
-            msg_type = get_message(type_map[topic])
-            steering_msg = deserialize_message(data, msg_type)
+            if topic == steering_topic:
+                msg_type = get_message(type_map[topic])
+                steering_msg = deserialize_message(data, msg_type)
 
-            assert isinstance(steering_msg, AckermannDriveStamped)
+                assert isinstance(steering_msg, AckermannDriveStamped)
 
-            t = steering_msg.header.stamp.sec + steering_msg.header.stamp.nanosec * 1e-9
-            delta = steering_msg.drive.steering_angle
-            
-            deltas.append(delta)
-            t_delta.append(t)
+                t = steering_msg.header.stamp.sec + steering_msg.header.stamp.nanosec * 1e-9
+                delta = steering_msg.drive.steering_angle
+                
+                deltas.append(delta)
+                t_delta.append(t)
 
-    # Convert the lists to numpy arrays
-    a_xs = np.array(a_xs)
-    a_ys = np.array(a_ys)
-    rs = np.array(rs)
 
-    rdots = np.gradient(rs, t_imu)
-    v_xs = cumulative_trapezoid(a_xs, t_imu, initial=0)
+        a_xs = np.array(a_xs)
+        a_ys = np.array(a_ys)
+        rs = np.array(rs)
+        t_imu = np.array(t_imu)
+        deltas = np.array(deltas)
+        t_delta = np.array(t_delta)
 
-    deltas = np.array(deltas)
-    deltas = lerp(t_imu, t_delta, deltas)
+        rdots = np.gradient(rs, t_imu)
+        v_xs = cumulative_trapezoid(a_xs, t_imu, initial=0)
 
-    # Calculate sideslip angles
-    betas = np.arctan((l_r / (l_f + l_r)) * np.tan(deltas))
-    alphas = slip_angle(v_xs, rs, deltas, betas, l_f)
+        deltas = lerp(t_imu, t_delta, deltas)
+        betas = np.arctan((l_r / (l_f + l_r)) * np.tan(deltas))
 
-    # Calculate the lateral forces
-    Fys = (i_z * rdots + l_r * m * a_ys) / (wheelbase * np.cos(deltas))
+        alphas = slip_angle(v_xs, rs, deltas, betas, l_f)
+        Fys = (i_z * rdots + l_r * m * a_ys) / (wheelbase * np.cos(deltas))
+
+        non_zero_idx = np.nonzero(v_xs)
+        alphas = alphas[non_zero_idx]
+        Fys = Fys[non_zero_idx]
+
+        alphas_ = np.concatenate((alphas_, alphas))
+        Fys_ = np.concatenate((Fys_, Fys))
+
 
     # Initial guess taken from https://www.edy.es/dev/docs/pacejka-94-parameters-explained-a-comprehensive-guide/ for dry tarmac.
     x0 = [1.0, 1.9, 10.0]
 
     print("Optimizing...")
 
+    # Minimize the sum of residuals. Bounds are taken from the same source as the initial guess.
     result = minimize(
-        lambda x: objective(x[0], x[1], x[2], alphas, Fys),
-        x0
+        lambda x: objective(x[0], x[1], x[2], alphas_, Fys_),
+        x0,
+        bounds=[(0.1, 1.9), (1.0, 2.0), (4.0, 12.0)]
     )
 
     D, C, B = result.x
