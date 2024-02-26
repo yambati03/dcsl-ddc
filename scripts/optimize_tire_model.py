@@ -6,7 +6,6 @@ from scipy.optimize import minimize
 from scipy.integrate import cumulative_trapezoid
 
 import rosbag2_py
-from lib.bag import get_rosbag_options
 from rosidl_runtime_py.utilities import get_message
 from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import Imu
@@ -14,8 +13,19 @@ from ackermann_msgs.msg import AckermannDriveStamped
 
 import matplotlib.pyplot as plt
 
-with open("config/car_params.yaml", "r") as f:
+with open("../config/car_params.yaml", "r") as f:
     params = yaml.safe_load(f)
+
+
+def get_rosbag_options(path, storage_id, serialization_format='cdr'):
+    storage_options = rosbag2_py.StorageOptions(
+        uri=path, storage_id=storage_id)
+
+    converter_options = rosbag2_py.ConverterOptions(
+        input_serialization_format=serialization_format,
+        output_serialization_format=serialization_format)
+
+    return storage_options, converter_options
 
 
 # Define the Pacejka tire model
