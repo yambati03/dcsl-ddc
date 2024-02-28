@@ -3,6 +3,7 @@ import math
 import time
 import click
 import numpy as np
+from scipy.signal import savgol_filter
 
 import tire
 from simulator import Simulator
@@ -77,6 +78,10 @@ def main(bag, plot_predicted):
     vx = np.gradient(x, t)
     vy = np.gradient(y, t)
     r = np.gradient(h, t)
+
+    # Smooth velocity
+    vx = savgol_filter(vx, 51, 2)
+    vy = savgol_filter(vy, 51, 2)
  
     for i in range(1, log.shape[0] - lookahead_steps):
 
