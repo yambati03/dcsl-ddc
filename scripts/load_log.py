@@ -118,7 +118,7 @@ def load_log_from_bag(filename, imu_topic="/imu/data", teleop_topic="/teleop", v
 
     return t, a_xs, a_ys, rs, deltas, vicon
     
-    
+
 def load_ground_truth_from_bag(filename, vicon_topic="/vicon", teleop_topic="/teleop"):
     reader = rosbag2_py.SequentialReader()
     storage_options, converter_options = get_rosbag_options(filename, "sqlite3")
@@ -175,8 +175,6 @@ def load_ground_truth_from_bag(filename, vicon_topic="/vicon", teleop_topic="/te
 
     deltas = lerp(vicon[:, 0], t_delta, deltas)
     throttles = lerp(vicon[:, 0], t_delta, throttles)
-
-    print(vicon.shape, deltas.shape, throttles.shape)
 
     return np.hstack((vicon, deltas[:, np.newaxis], throttles[:, np.newaxis]))
 

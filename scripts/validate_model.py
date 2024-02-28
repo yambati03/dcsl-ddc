@@ -14,10 +14,10 @@ def step(state, control, dt=0.01):
     x, vx_g, y, vy_g, h, r = state
     steering, throttle = control
 
-    l_f = 0.1651
-    l_r = 0.1651
-    m = 3.17
-    iz = 0.0398378
+    l_f = 0.1651 # m
+    l_r = 0.1651 # m
+    m = 3.17 # kg
+    iz = 0.0398378 # kg m^2
  
     # Get velocity in local frame
     vx = vx_g * np.cos(h) + vy_g * np.sin(h)
@@ -40,9 +40,9 @@ def step(state, control, dt=0.01):
     d_vy = -vx * r + (Fyr + Fyf * np.cos(steering)) / m # m/s^2
     d_r = (l_f * Fyf * np.cos(steering) - l_r * Fyr) / iz # rad/s^2
 
-    vx = vx + d_vx * dt
-    vy = vy + d_vy * dt
-    r += r + d_r * dt
+    vx += d_vx * dt
+    vy += d_vy * dt
+    r += d_r * dt
 
     # Get velocity in global frame
     vx_g = vx * np.cos(h) - vy * np.sin(h)
@@ -57,7 +57,8 @@ def step(state, control, dt=0.01):
 
 @click.command()
 @click.argument("bag", type=click.Path(exists=True))
-def main(bag):
+@click.option("--plot_predicted", "-p", is_flag=True)
+def main(bag, plot_predicted):
     sim = Simulator()
     log = Log(bag)
 
@@ -84,17 +85,18 @@ def main(bag):
 
         sim.clear_img()
 
-        predicted_states = [state]
+        if plot_predicted:
+            predicted_states = [state]
 
-        for j in range(i + 1, i + lookahead_steps):
-            state = step(state, control)
-            predicted_states.append(state)
-            control = (steering[j], throttle[j])
+            for j in range(i + 1, i + lookahead_steps):
+                state = step(state, control, dt=(t[j] - t[j - 1]))
+                predicted_states.append(state)
+                control = (steering[j], throttle[j])
 
-        predicted_states = np.array(predicted_states)
+            predicted_states = np.array(predicted_states)
 
-        predicted_future_traj = np.vstack([predicted_states[:, 0],predicted_states[:, 2]]).T
-        sim.draw_polyline(predicted_future_traj * 100 + 512, color=(0, 255, 0))
+            predicted_future_traj = np.vstack([predicted_states[:, 0],predicted_states[:, 2]]).T
+            sim.draw_polyline(predicted_future_traj * 100 + 512, color=(0, 255, 0))
 
         actual_future_traj = np.vstack([x[i:i + lookahead_steps],y[i:i + lookahead_steps]]).T
         sim.draw_polyline(actual_future_traj * 100 + 512)
