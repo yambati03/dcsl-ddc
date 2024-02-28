@@ -17,12 +17,7 @@ def get_tire_curve_f():
 
 
 def get_tire_curve_r():
-    D = 1.15189
-    C = 2.0
-    B = 8.15565
-
-    func = partial(pacejka, D, C, B)
-    return func
+    return get_tire_curve_f()
 
 
 def plot_tire_curve(tire_curve):

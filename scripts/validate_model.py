@@ -11,8 +11,8 @@ from load_log import load_ground_truth_from_bag
 
 
 def step(state, control, dt=0.01):
-    x, vx_g, y, vy_g, h, r = tuple(state)
-    steering, throttle = tuple(control)
+    x, vx_g, y, vy_g, h, r = state
+    steering, throttle = control
 
     l_f = 0.1651
     l_r = 0.1651
@@ -36,9 +36,9 @@ def step(state, control, dt=0.01):
     Fyf = tire_curve_f(slip_f)
     Fyr = tire_curve_r(slip_r)
  
-    d_vx = throttle
-    d_vy = -vx * r + (Fyr + Fyf * np.cos(steering)) / m
-    d_r = (l_f * Fyf * np.cos(steering) - l_r * Fyr) / iz
+    d_vx = throttle # m/s^2
+    d_vy = -vx * r + (Fyr + Fyf * np.cos(steering)) / m # m/s^2
+    d_r = (l_f * Fyf * np.cos(steering) - l_r * Fyr) / iz # rad/s^2
 
     vx = vx + d_vx * dt
     vy = vy + d_vy * dt

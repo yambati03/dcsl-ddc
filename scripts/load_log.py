@@ -118,6 +118,7 @@ def load_log_from_bag(filename, imu_topic="/imu/data", teleop_topic="/teleop", v
 
     return t, a_xs, a_ys, rs, deltas, vicon
     
+    
 def load_ground_truth_from_bag(filename, vicon_topic="/vicon", teleop_topic="/teleop"):
     reader = rosbag2_py.SequentialReader()
     storage_options, converter_options = get_rosbag_options(filename, "sqlite3")
@@ -161,7 +162,7 @@ def load_ground_truth_from_bag(filename, vicon_topic="/vicon", teleop_topic="/te
 
             t = steering_msg.header.stamp.sec + steering_msg.header.stamp.nanosec * 1e-9
             delta = steering_msg.drive.steering_angle
-            throttle = steering_msg.drive.speed
+            throttle = steering_msg.drive.acceleration
             
             deltas.append(delta)
             t_delta.append(t)
@@ -179,36 +180,6 @@ def load_ground_truth_from_bag(filename, vicon_topic="/vicon", teleop_topic="/te
 
     return np.hstack((vicon, deltas[:, np.newaxis], throttles[:, np.newaxis]))
 
-def load_control_inputs_from_bag(filename, teleop_topic="/teleop"):
-    reader = rosbag2_py.SequentialReader()
-    storage_options, converter_options = get_rosbag_options(filename, "sqlite3")
-    reader.open(storage_options, converter_options)
-    reader.set_filter(rosbag2_py.StorageFilter([teleop_topic]))
-
-    topic_types = reader.get_all_topics_and_types()
-    type_map = {
-        topic_types[i].name: topic_types[i].type for i in range(len(topic_types))
-    }
-
-    t_delta = []
-    deltas = []
-
-    if topic == teleop_topic:
-        msg_type = get_message(type_map[topic])
-        steering_msg = deserialize_message(data, msg_type)
-
-        assert isinstance(steering_msg, AckermannDriveStamped)
-
-        t = steering_msg.header.stamp.sec + steering_msg.header.stamp.nanosec * 1e-9
-        delta = steering_msg.drive.steering_angle
-        
-        deltas.append(delta)
-        t_delta.append(t)
-
-    t_delta = np.array(t_delta)
-    deltas = np.array(deltas)
-
-    return t_delta, deltas
 
 def load_log_from_npy(filename):
     log = np.load(filename)

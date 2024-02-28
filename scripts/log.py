@@ -20,7 +20,8 @@ class Log():
 
 
     def read(self):
-        print(self.type_map)
+        print("Not implemented")
+        pass
 
 
     def get_rosbag_options(self, path, storage_id, serialization_format='cdr'):
