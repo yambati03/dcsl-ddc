@@ -19,8 +19,11 @@ def pacejka(D, C, B, alphas):
 
 
 # Define the slip angle
-def slip_angle(v_xs: np.ndarray, rs: np.ndarray, deltas: np.ndarray, betas: np.ndarray, l_f):
-    return np.arctan(betas + (l_f * rs) / v_xs) - deltas
+def slip_angle(v_xs: np.ndarray, rs: np.ndarray, deltas: np.ndarray, betas: np.ndarray, l, wheel="front"):
+    if wheel == "front":
+        return np.arctan(betas + (l * rs) / v_xs) - deltas
+    elif wheel == "rear":
+        return np.arctan(betas - (l * rs) / v_xs)
 
 
 # We want to minimize the sum of the squared differences between
@@ -67,14 +70,18 @@ def optimize(bags):
         rdots = np.gradient(rs, t)
         v_xs = cumulative_trapezoid(a_xs, t, initial=0)
 
-        betas = np.arctan((l_r / (l_f + l_r)) * np.tan(deltas))
+        v_ys = cumulative_trapezoid(a_ys, t, initial=0)
+        betas = np.arctan(v_ys / v_xs)
 
-        alphas = slip_angle(v_xs, rs, deltas, betas, l_f)
-        Fys = (i_z * rdots + l_r * m * a_ys) / (wheelbase * np.cos(deltas))
+        alphas = slip_angle(v_xs, rs, deltas, betas, l_r, wheel="rear")
+        
+        # Fyfs = (i_z * rdots + l_r * m * a_ys) / (wheelbase * np.cos(deltas))
+
+        Fyrs = (-i_z * rdots + l_f * m * (a_ys + rs * v_xs)) / wheelbase
 
         non_zero_idx = np.nonzero(v_xs)
         alphas = alphas[non_zero_idx]
-        Fys = Fys[non_zero_idx]
+        Fys = Fyrs[non_zero_idx]
 
         alphas_ = np.concatenate((alphas_, alphas))
         Fys_ = np.concatenate((Fys_, Fys))

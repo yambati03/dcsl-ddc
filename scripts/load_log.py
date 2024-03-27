@@ -113,13 +113,18 @@ def load_log_from_bag(filename, imu_topic="/imu/data", teleop_topic="/teleop", v
     deltas = lerp(t, t_delta, np.array(deltas))
 
     if save:
-        formatted_date = datetime.now().strftime("%Y_%m_%d-%p%I_%M_%S")
-        np.save(f"{formatted_date}.npy", np.vstack((t_imu, a_xs, a_ys, rs, deltas)))
+        save_file(np.vstack((t_imu, a_xs, a_ys, rs, deltas)))
 
-    return t, a_xs, a_ys, rs, deltas, vicon
-    
+    return t, a_xs, a_ys, rs, deltas #, vicon
 
-def load_ground_truth_from_bag(filename, vicon_topic="/vicon", teleop_topic="/teleop"):
+
+def save_file(data, filename=None):
+    if filename is None:
+        filename = datetime.now().strftime("%Y_%m_%d-%p%I_%M_%S")
+    np.save(f"{filename}.npy", data)
+
+
+def load_ground_truth_from_bag(filename, vicon_topic="/vicon", teleop_topic="/ackermann_cmd"):
     reader = rosbag2_py.SequentialReader()
     storage_options, converter_options = get_rosbag_options(filename, "sqlite3")
     reader.open(storage_options, converter_options)
@@ -162,7 +167,7 @@ def load_ground_truth_from_bag(filename, vicon_topic="/vicon", teleop_topic="/te
 
             t = steering_msg.header.stamp.sec + steering_msg.header.stamp.nanosec * 1e-9
             delta = steering_msg.drive.steering_angle
-            throttle = steering_msg.drive.acceleration
+            throttle = steering_msg.drive.speed
             
             deltas.append(delta)
             t_delta.append(t)

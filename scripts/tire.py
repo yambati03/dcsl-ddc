@@ -8,16 +8,21 @@ def pacejka(D, C, B, alpha):
 
 
 def get_tire_curve_f():
-    D = 1.15189
-    C = 2.0
-    B = 8.15565
+    D = 1.23306
+    C = 1.0
+    B = 4.0
 
     func = partial(pacejka, D, C, B)
     return func
 
 
 def get_tire_curve_r():
-    return get_tire_curve_f()
+    D = 0.79573
+    C = 2.0
+    B = 12.0
+
+    func = partial(pacejka, D, C, B)
+    return func
 
 
 def plot_tire_curve(tire_curve):
@@ -35,7 +40,3 @@ def plot_tire_curve(tire_curve):
     ax.set_xticks(np.arange(-2, 2, 0.2))
     
     plt.show()
-
-if __name__ == '__main__':
-    tire_curve = get_tire_curve()
-    plot_tire_curve(tire_curve)
