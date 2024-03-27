@@ -24,7 +24,7 @@ def compute_r(h, t):
 def pretty(d):
     print("{")
     for key, value in d.items():
-        print(f"\t {str(key)}: {str(value)}")  
+        print(f"\t {str(key)}: {str(value)}")
     print("}")
 
 
@@ -68,7 +68,7 @@ def step(state, control, dt=0.01):
     l_f = 0.1651  # m
     l_r = 0.1651  # m
     m = 3.17  # kg
-    iz = 0.01 # 3 #98378  # kg m^2
+    iz = 0.008  # 3 #98378  # kg m^2
 
     # Get velocity in local frame
     vx = vx_g * np.cos(h) + vy_g * np.sin(h)
@@ -87,7 +87,7 @@ def step(state, control, dt=0.01):
     Fyf = tire_curve_f(slip_f)
     Fyr = tire_curve_r(slip_r)
 
-    d_vx = throttle - vx # m/s^2
+    d_vx = throttle - vx  # m/s^2
     d_vy = -vx * r + (Fyr + Fyf * np.cos(steering)) / m  # m/s^2
     d_r = (l_f * Fyf * np.cos(steering) - l_r * Fyr) / iz  # rad/s^2
 
@@ -99,21 +99,21 @@ def step(state, control, dt=0.01):
     vx_g = vx * np.cos(h) - vy * np.sin(h)
     vy_g = vx * np.sin(h) + vy * np.cos(h)
 
-    if r >  2 * np.pi:
-        debug_dict = {
-            "lateral_acc_f": Fyf / m,
-            "lateral_acc_r": Fyr / m,
-            "dr": d_r,
-            "r": r,
-            "dt": dt,
-            "vx": vx,
-            "d_vx": d_vx,
-            "vy": vy,
-            "d_vy": d_vy,
-            "vx_g": vx_g,
-            "vy_g": vy_g,
-        }
-        pretty(debug_dict)
+    # if r >  2 * np.pi:
+    #     debug_dict = {
+    #         "lateral_acc_f": Fyf / m,
+    #         "lateral_acc_r": Fyr / m,
+    #         "dr": d_r,
+    #         "r": r,
+    #         "dt": dt,
+    #         "vx": vx,
+    #         "d_vx": d_vx,
+    #         "vy": vy,
+    #         "d_vy": d_vy,
+    #         "vx_g": vx_g,
+    #         "vy_g": vy_g,
+    #     }
+    #     pretty(debug_dict)
 
     # Update state
     x += vx_g * dt
@@ -129,7 +129,6 @@ def step(state, control, dt=0.01):
 @click.option("--plot_heading", "-h", is_flag=True)
 def main(bag, plot_predicted, plot_heading):
     sim = Simulator()
-    log = Log(bag)
 
     log = load_ground_truth_from_bag(bag)
     lookahead_steps = 50

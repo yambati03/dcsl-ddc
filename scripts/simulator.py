@@ -33,6 +33,8 @@ class Simulator:
 
     def clear_img(self):
         self.img.fill(255)
+
+        # Draw origin and coordinate frame
         cv2.circle(self.img, self.origin, radius=4, color=(0, 0, 255), thickness=-1)
         self.draw_frame()
 
@@ -54,12 +56,12 @@ class Simulator:
         car = np.array([self.vicon_to_image_rot(p) for p in car])
         front = self.vicon_to_image_rot(front)
 
-        front = front @ np.array(
+        T_car_rot = np.array(
             [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
         )
-        car = car @ np.array(
-            [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
-        )
+
+        front = front @ T_car_rot
+        car = car @ T_car_rot
 
         transformed_point = self.vicon_to_image([x, y])
         car += np.array([transformed_point[0], transformed_point[1]])
@@ -91,22 +93,23 @@ class Simulator:
 
     def show_raw_state(self, state, control):
         x, vx, y, vy, h, r = state
+        vx_l = vx * np.cos(h) + vy * np.sin(h)
+        vy_l = -vx * np.sin(h) + vy * np.cos(h)
+
         cv2.rectangle(self.img, (780, 100), (900, 290), (0, 0, 255), 1)
+
         self.draw_text(f"x: {x:.2f}", 800, 120)
         self.draw_text(f"y: {y:.2f}", 800, 140)
         self.draw_text(f"vx: {vx:.2f}", 800, 160)
         self.draw_text(f"vy: {vy:.2f}", 800, 180)
         self.draw_text(f"h: {h:.2f}", 800, 200)
         self.draw_text(f"r: {r:.2f}", 800, 220)
-        vx_l = vx * np.cos(h) + vy * np.sin(h)
-        vy_l = -vx * np.sin(h) + vy * np.cos(h)
         self.draw_text(f"vx_l: {vx_l:.2f}", 800, 240)
         self.draw_text(f"vy_l: {vy_l:.2f}", 800, 260)
         self.draw_text(f"steer: {control[0]:.2f}", 800, 280)
 
     def draw_steering(self, steering):
         def map(val, in_l, in_h, out_low, out_high):
-            # out of bound flag
             oob = False
             if val < in_l:
                 val = in_l
@@ -116,22 +119,14 @@ class Simulator:
                 oob = True
             return (val - in_l) / (in_h - in_l) * (out_high - out_low) + out_low, oob
 
-        x1 = 100
-        y1 = 40
+        self.draw_text(f"Steering:", 20, 76)
 
-        # Add steering bar
+        x1, y1 = 100, 40
+
+        # Add steering bar, make bar red if out of bounds
         steering, oob = map(steering, -0.35, 0.35, 0, 100)
-        cv2.putText(
-            self.img,
-            f"Steering:",
-            (20, 76),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 0, 0),
-            1,
-            cv2.LINE_AA,
-        ),
         cv2.rectangle(self.img, (x1, y1 + 25), (x1 + 100, y1 + 40), (0, 0, 255), 1)
+
         if oob:
             cv2.rectangle(
                 self.img,
