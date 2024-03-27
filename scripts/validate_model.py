@@ -13,14 +13,6 @@ from log import Log
 from load_log import load_ground_truth_from_bag
 
 
-def compute_r(h, t):
-    h_diff = np.diff(h)
-    h_diff = (h_diff + np.pi) % (2 * np.pi) - np.pi
-    r = h_diff / np.diff(t)
-    r = np.concatenate([r, [r[-1]]])
-    return r
-
-
 def pretty(d):
     print("{")
     for key, value in d.items():
@@ -40,7 +32,7 @@ def step_kinematic(state, control, dt=0.01):
 
     v = vx
 
-    beta = np.arctan(np.tan(steering) * lr / (lf + lr))
+    beta = np.arctan(np.tan(steering) * lf / (lf + lr))
     dXdt = v * np.cos(h + beta)
     dYdt = v * np.sin(h + beta)
     dvdt = throttle - v
@@ -123,39 +115,54 @@ def step(state, control, dt=0.01):
     return (x, vx_g, y, vy_g, h, r)
 
 
+# wrap to -pi,pi
+def wrap_continuous(val):
+    wrap = lambda x: np.mod(x + np.pi, 2 * np.pi) - np.pi
+    dval = np.diff(val)
+    dval = wrap(dval)
+    retval = np.hstack([0, np.cumsum(dval)]) + val[0]
+    return retval
+
+
 @click.command()
 @click.argument("bag", type=click.Path(exists=True))
 @click.option("--plot_predicted", "-p", is_flag=True)
-@click.option("--plot_heading", "-h", is_flag=True)
-def main(bag, plot_predicted, plot_heading):
+@click.option("--plot_state", "-s", is_flag=True)
+def main(bag, plot_predicted, plot_state):
     sim = Simulator()
 
     log = load_ground_truth_from_bag(bag)
     lookahead_steps = 50
 
-    # Initial state
+    # Initialize state
     t = log[:, 0] - log[0, 0]
     t = np.linspace(0, t[-1], t.shape[0])
     x = log[:, 1]
     y = log[:, 2]
-    h = log[:, 6]
+    h = savgol_filter(wrap_continuous(log[:, 6]), 51, 2)
 
     steering = log[:, 7]
     throttle = log[:, 8]
 
     vx = np.gradient(x, t)
     vy = np.gradient(y, t)
-    r = compute_r(h, t)
+    r = np.hstack([0, np.diff(h)]) / (t[1] - t[0])
 
     # Smooth velocity
     vx = savgol_filter(vx, 51, 2)
     vy = savgol_filter(vy, 51, 2)
 
     # Plot time versus h and r using ax
-    if plot_heading:
-        _, ax = plt.subplots(2, 1, figsize=(15, 10))
-        ax[0].plot(t, h, label="h")
-        ax[1].plot(t, r, label="r")
+    if plot_state:
+        _, ax = plt.subplots(2, 2, figsize=(15, 10))
+        ax[0][0].plot(t, h, label="h")
+        ax[0][0].set_title("Heading")
+        ax[1][0].plot(t, r, label="r")
+        ax[1][0].set_title("Yaw Rate")
+        ax[0][1].plot(t, vx, label="vx")
+        ax[0][1].set_title("Velocity (x)")
+        ax[1][1].plot(t, vy, label="vy")
+        ax[1][1].set_title("Velocity (y)")
         plt.show()
 
     for i in range(1, log.shape[0] - lookahead_steps):
