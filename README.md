@@ -12,6 +12,8 @@ The `validate_model.py` script plots the trajectory from a given log against the
 
 #### Steps to run `validate_model.py`
 
+> **Note:** These steps assume that ROS 2 is installed.
+
 1. Since the script loads a ROS bag that depends on custom message types (`AckermannDriveStamped`, `ViconObject`), the script must be run within a ROS workspace with the packages that define these types. First, create a ROS workspace by running `mkdir -p ros_ws/src`.
 2. Navigate to `ros_ws/src` and clone this repository. Then 
    * Clone the `ackermann_msgs` repo by running `git clone -b ros2 https://github.com/ros-drivers/ackermann_msgs.git`
