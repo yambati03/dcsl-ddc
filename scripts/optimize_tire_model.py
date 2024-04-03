@@ -19,7 +19,14 @@ def pacejka(D, C, B, alphas):
 
 
 # Define the slip angle
-def slip_angle(v_xs: np.ndarray, rs: np.ndarray, deltas: np.ndarray, betas: np.ndarray, l, wheel="front"):
+def slip_angle(
+    v_xs: np.ndarray,
+    rs: np.ndarray,
+    deltas: np.ndarray,
+    betas: np.ndarray,
+    l,
+    wheel="front",
+):
     if wheel == "front":
         return np.arctan(betas + (l * rs) / v_xs) - deltas
     elif wheel == "rear":
@@ -32,26 +39,30 @@ def objective(D, C, B, alphas: np.ndarray, Fys: np.ndarray):
     return np.sum((Fys - pacejka(D, C, B, alphas)) ** 2)
 
 
-def plot_func(D, C, B):
+def plot_func(D, C, B, alphas, Fys, show_datapoints=False):
     func = lambda a: D * np.sin(C * np.arctan(B * a))
 
     _, ax = plt.subplots(figsize=(15, 10))
     x = np.linspace(-1, 1, 1000)
     y = func(x)
-    l, = ax.plot(x, y, 'b-')
+    (l,) = ax.plot(x, y, "b-")
 
-    ax.title.set_text('Optimized Pacejka Model')
-    ax.set_xlabel('Slip Angle (rad)')
-    ax.set_ylabel('Lateral Force (N)')
+    ax.title.set_text("Optimized Pacejka Model")
+    ax.set_xlabel("Slip Angle (rad)")
+    ax.set_ylabel("Lateral Force (N)")
     ax.grid(True)
     ax.set_xticks(np.arange(-1, 1, 0.1))
-    
+
+    if show_datapoints:
+        ax.scatter(alphas, Fys, color="red")
+
     plt.show()
 
 
 @click.command()
 @click.argument("bags", type=click.Path(exists=True), nargs=-1)
-def optimize(bags):
+@click.option("--show_datapoints", "-s", is_flag=True)
+def optimize(bags, show_datapoints):
     i_z = params["i_z"]
     l_f = params["l_f"]
     l_r = params["l_r"]
@@ -73,9 +84,18 @@ def optimize(bags):
         v_ys = cumulative_trapezoid(a_ys, t, initial=0)
         betas = np.arctan(v_ys / v_xs)
 
-        alphas = slip_angle(v_xs, rs, deltas, betas, l_r, wheel="rear")
-        
-        # Fyfs = (i_z * rdots + l_r * m * a_ys) / (wheelbase * np.cos(deltas))
+        alphas = slip_angle(v_xs, rs, deltas, betas, l_f, wheel="rear")
+
+        _, ax = plt.subplots(2, 2, figsize=(15, 10))
+        ax[0][0].plot(t, rdots)
+        ax[0][0].set_title("rdots")
+        ax[1][0].plot(t, a_ys)
+        ax[1][0].set_title("A_ys")
+        ax[0][1].plot(t, rs)
+        ax[0][1].set_title("rs")
+        plt.show()
+
+        # Fyfs = (i_z * rdots + l_r * m * (a_ys + rs * v_xs)) / (wheelbase * np.cos(deltas))
 
         Fyrs = (-i_z * rdots + l_f * m * (a_ys + rs * v_xs)) / wheelbase
 
@@ -86,9 +106,8 @@ def optimize(bags):
         alphas_ = np.concatenate((alphas_, alphas))
         Fys_ = np.concatenate((Fys_, Fys))
 
-
     # Initial guess taken from https://www.edy.es/dev/docs/pacejka-94-parameters-explained-a-comprehensive-guide/ for dry tarmac.
-    x0 = [1.0, 1.9, 10.0]
+    x0 = [5.0, 1.5, 10.0]
 
     print("Optimizing...")
 
@@ -96,14 +115,14 @@ def optimize(bags):
     result = minimize(
         lambda x: objective(x[0], x[1], x[2], alphas_, Fys_),
         x0,
-        bounds=[(0.1, 1.9), (1.0, 2.0), (4.0, 12.0)]
+        bounds=[(0.1, 5.0), (1.0, 2.0), (1.0, 12.0)],
     )
 
     D, C, B = result.x
 
     print(f"D: {D}, C: {C}, B: {B}")
 
-    plot_func(D, C, B)
+    plot_func(D, C, B, alphas_, Fys_, show_datapoints)
 
 
 if __name__ == "__main__":

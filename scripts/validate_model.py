@@ -1,10 +1,8 @@
 import cv2
-import math
 import time
 import click
 import numpy as np
 from scipy.signal import savgol_filter
-from scipy.interpolate import splev, splrep, UnivariateSpline
 import matplotlib.pyplot as plt
 
 import tire
@@ -60,7 +58,7 @@ def step(state, control, dt=0.01):
     l_f = 0.1651  # m
     l_r = 0.1651  # m
     m = 3.17  # kg
-    iz = 0.008  # 3 #98378  # kg m^2
+    iz = 0.0398378  # 3 #98378  # kg m^2
 
     # Get velocity in local frame
     vx = vx_g * np.cos(h) + vy_g * np.sin(h)
@@ -90,22 +88,6 @@ def step(state, control, dt=0.01):
     # Get velocity in global frame
     vx_g = vx * np.cos(h) - vy * np.sin(h)
     vy_g = vx * np.sin(h) + vy * np.cos(h)
-
-    # if r >  2 * np.pi:
-    #     debug_dict = {
-    #         "lateral_acc_f": Fyf / m,
-    #         "lateral_acc_r": Fyr / m,
-    #         "dr": d_r,
-    #         "r": r,
-    #         "dt": dt,
-    #         "vx": vx,
-    #         "d_vx": d_vx,
-    #         "vy": vy,
-    #         "d_vy": d_vy,
-    #         "vx_g": vx_g,
-    #         "vy_g": vy_g,
-    #     }
-    #     pretty(debug_dict)
 
     # Update state
     x += vx_g * dt
