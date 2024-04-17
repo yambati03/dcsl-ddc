@@ -3,14 +3,14 @@ import click
 import math
 from scipy.signal import savgol_filter
 from load_log import load_ground_truth_from_bag
-from tire import pacejka
+from tire import pacejka, linear
 from functools import partial
 import itertools
 from tqdm import tqdm
 
 
-def get_tire_curve(D, C, B):
-    func = partial(pacejka, D, C, B)
+def get_tire_curve(B):
+    func = partial(linear, B)
     return func
 
 
@@ -34,8 +34,8 @@ def step(state, control, Bf, Br, dt=0.01):
     slip_r = np.arctan(beta - (l_r * r) / vx)
 
     # Calculate lateral forces
-    tire_curve_f = get_tire_curve(1, 1, Bf)
-    tire_curve_r = get_tire_curve(1, 1, Br)
+    tire_curve_f = get_tire_curve(Bf)
+    tire_curve_r = get_tire_curve(Br)
 
     Fyf = tire_curve_f(slip_f)
     Fyr = tire_curve_r(slip_r)
@@ -113,30 +113,30 @@ def search_best_params(log):
     for Bf, Br in tqdm(
         itertools.product(np.arange(1, 20, 0.1), np.arange(1, 20, 0.1)), total=36100
     ):
-        error = 0.0
 
-        for i in range(1, 50):  # log.shape[0] - lookahead_steps):
-            state = (x[i], vx[i], y[i], vy[i], h[i], r[i])
-            control = (steering[i], throttle[i])
+        i = 50
 
-            predicted_states = [state]
+        state = (x[i], vx[i], y[i], vy[i], h[i], r[i])
+        control = (steering[i], throttle[i])
 
-            for j in range(i + 1, i + lookahead_steps):
-                state = step(state, control, Bf, Br, dt=(t[j] - t[j - 1]))
-                predicted_states.append(state)
-                control = (steering[j], throttle[j])
+        predicted_states = [state]
 
-            predicted_states = np.array(predicted_states)
+        for j in range(i + 1, i + lookahead_steps):
+            state = step(state, control, Bf, Br, dt=(t[j] - t[j - 1]))
+            predicted_states.append(state)
+            control = (steering[j], throttle[j])
 
-            predicted_future_traj = np.vstack(
-                [predicted_states[:, 0], predicted_states[:, 2]]
-            ).T
+        predicted_states = np.array(predicted_states)
 
-            actual_future_traj = np.vstack(
-                [x[i : i + lookahead_steps], y[i : i + lookahead_steps]]
-            ).T
+        predicted_future_traj = np.vstack(
+            [predicted_states[:, 0], predicted_states[:, 2]]
+        ).T
 
-            error += ade(actual_future_traj, predicted_future_traj)
+        actual_future_traj = np.vstack(
+            [x[i : i + lookahead_steps], y[i : i + lookahead_steps]]
+        ).T
+
+        error = ade(actual_future_traj, predicted_future_traj)
 
         if error < best_error:
             best_error = error

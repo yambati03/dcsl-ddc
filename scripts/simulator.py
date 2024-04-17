@@ -7,7 +7,7 @@ class Simulator:
         self.img = np.zeros((1024, 1024, 3), np.uint8)
         self.img.fill(255)
         self.origin = origin
-        self.w = 10  # m
+        self.w = 11  # m
 
         self.resolution = self.img.shape[0] / self.w
 
@@ -96,7 +96,7 @@ class Simulator:
         vx_l = vx * np.cos(h) + vy * np.sin(h)
         vy_l = -vx * np.sin(h) + vy * np.cos(h)
 
-        cv2.rectangle(self.img, (780, 100), (900, 290), (0, 0, 255), 1)
+        cv2.rectangle(self.img, (780, 100), (900, 310), (0, 0, 255), 1)
 
         self.draw_text(f"x: {x:.2f}", 800, 120)
         self.draw_text(f"y: {y:.2f}", 800, 140)
@@ -107,6 +107,7 @@ class Simulator:
         self.draw_text(f"vx_l: {vx_l:.2f}", 800, 240)
         self.draw_text(f"vy_l: {vy_l:.2f}", 800, 260)
         self.draw_text(f"steer: {control[0]:.2f}", 800, 280)
+        self.draw_text(f"throttle: {control[1]:.2f}", 800, 300)
 
     def draw_steering(self, steering):
         def map(val, in_l, in_h, out_low, out_high):

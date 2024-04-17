@@ -57,8 +57,8 @@ def step(state, control, dt=0.01):
 
     l_f = 0.1651  # m
     l_r = 0.1651  # m
-    m = 3.17  # kg
-    iz = 0.0398378  # 3 #98378  # kg m^2
+    m = 4.202  # kg
+    iz = 0.08502599670201208  # 3 #98378  # kg m^2
 
     # Get velocity in local frame
     vx = vx_g * np.cos(h) + vy_g * np.sin(h)
@@ -78,7 +78,7 @@ def step(state, control, dt=0.01):
     Fyr = tire_curve_r(slip_r)
 
     d_vx = throttle - vx  # m/s^2
-    d_vy = -vx * r + (Fyr + Fyf * np.cos(steering)) / m  # m/s^2
+    d_vy = vx * r - ((Fyr + Fyf * np.cos(steering)) / m)  # m/s^2
     d_r = (l_f * Fyf * np.cos(steering) - l_r * Fyr) / iz  # rad/s^2
 
     vx += d_vx * dt

@@ -148,3 +148,24 @@ def load_ground_truth_from_bag(
     throttles = lerp(vicon[:, 0], t_delta, throttles)
 
     return np.hstack((vicon, deltas[:, np.newaxis], throttles[:, np.newaxis]))
+
+
+def load_vicon_from_bag(filename, vicon_topic="/vicon"):
+    log = Log(filename, topics=[vicon_topic])
+
+    vicon = []
+
+    for vicon_msg in log.topic_data_map[vicon_topic]:
+        assert isinstance(vicon_msg, ViconObject)
+
+        t = vicon_msg.header.stamp.sec + vicon_msg.header.stamp.nanosec * 1e-9
+        x = vicon_msg.position.x
+        y = vicon_msg.position.y
+        z = vicon_msg.position.z
+        rx = vicon_msg.rotation.x
+        ry = vicon_msg.rotation.y
+        rz = vicon_msg.rotation.z
+
+        vicon.append([t, x, y, z, rx, ry, rz])
+
+    return np.array(vicon)
