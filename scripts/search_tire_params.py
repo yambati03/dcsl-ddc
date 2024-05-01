@@ -20,28 +20,29 @@ def step(state, control, Bf, Br, dt=0.01):
 
     l_f = 0.1651  # m
     l_r = 0.1651  # m
-    m = 3.17  # kg
-    iz = 0.0398378  # 3 #98378  # kg m^2
+    m = 4.202  # kg
+    iz = 0.08502599670201208  # 3 #98378  # kg m^2
 
-    # Get velocity in local frame
+    # Get velocity in local frame (x is forward, y is left -- this follows the right hand rule)
     vx = vx_g * np.cos(h) + vy_g * np.sin(h)
     vy = -vx_g * np.sin(h) + vy_g * np.cos(h)
 
-    beta = np.arctan(vy / vx)
+    Cf = Bf
+    Cr = Br
 
     # Calculate slip angles
-    slip_f = np.arctan(beta + (l_f * r) / vx) - steering
-    slip_r = np.arctan(beta - (l_r * r) / vx)
+    slip_f = np.arctan((vy + l_f * r) / vx) - steering
+    slip_r = np.arctan((vy - l_r * r) / vx)
 
     # Calculate lateral forces
-    tire_curve_f = get_tire_curve(Bf)
-    tire_curve_r = get_tire_curve(Br)
+    # tire_curve_f = tire.get_tire_curve_f()
+    # tire_curve_r = tire.get_tire_curve_r()
 
-    Fyf = tire_curve_f(slip_f)
-    Fyr = tire_curve_r(slip_r)
+    Fyf = -Cf * slip_f
+    Fyr = -Cr * slip_r
 
     d_vx = throttle - vx  # m/s^2
-    d_vy = -vx * r + (Fyr + Fyf * np.cos(steering)) / m  # m/s^2
+    d_vy = -vx * r + ((Fyr + Fyf * np.cos(steering)) / m)  # m/s^2
     d_r = (l_f * Fyf * np.cos(steering) - l_r * Fyr) / iz  # rad/s^2
 
     vx += d_vx * dt
@@ -111,10 +112,10 @@ def search_best_params(log):
     best_params = None
 
     for Bf, Br in tqdm(
-        itertools.product(np.arange(1, 20, 0.1), np.arange(1, 20, 0.1)), total=36100
+        itertools.product(np.arange(80, 100, 0.1), np.arange(60, 80, 0.1)), total=40000
     ):
 
-        i = 50
+        i = 1143
 
         state = (x[i], vx[i], y[i], vy[i], h[i], r[i])
         control = (steering[i], throttle[i])

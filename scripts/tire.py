@@ -11,24 +11,6 @@ def linear(B, alpha):
     return B * alpha
 
 
-# def get_tire_curve_f():
-#     D = 1.23306
-#     C = 1.0
-#     B = 4.0
-
-#     func = partial(pacejka, D, C, B)
-#     return func
-
-
-# def get_tire_curve_r():
-#     D = 0.79573
-#     C = 2.0
-#     B = 12.0
-
-#     func = partial(pacejka, D, C, B)
-#     return func
-
-
 def get_tire_curve_f():
     D = 5.0
     C = 1.238

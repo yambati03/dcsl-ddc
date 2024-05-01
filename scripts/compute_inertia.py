@@ -13,7 +13,7 @@ def analyze_bag(filepath, plot):
     vicon = load_vicon_from_bag(filepath)
 
     t = vicon[:, 0] - vicon[0, 0]
-    # t = np.linspace(0, t[-1], t.shape[0])
+    t = np.linspace(0, t[-1], t.shape[0])
     h = vicon[:, 6]
 
     mask = np.where(t > 33)
@@ -21,7 +21,7 @@ def analyze_bag(filepath, plot):
     h = h[mask]
 
     # Find peaks
-    peaks, _ = find_peaks(h, width=4)
+    peaks, _ = find_peaks(h, width=8)
 
     print(f"Time between oscillations: {np.diff(t[peaks])}")
 
@@ -57,6 +57,8 @@ def compute_car_inertia():
         4 * np.pi * np.pi * h
     )
 
+    print(f"Calculated inertia of the system: {i_eq} kg m^2")
+    print(f"Calculated inertia of the pendulum: {i_p} kg m^2")
     print(f"Calculated inertia of the car: {i_eq - i_p} kg m^2")
     return i_eq - i_p
 
