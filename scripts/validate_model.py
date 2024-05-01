@@ -69,10 +69,6 @@ def step(state, control, dt=0.01):
     slip_f = np.arctan((vy + l_f * r) / vx) - steering
     slip_r = np.arctan((vy - l_r * r) / vx)
 
-    # Calculate lateral forces
-    # tire_curve_f = tire.get_tire_curve_f()
-    # tire_curve_r = tire.get_tire_curve_r()
-
     Fyf = -Cf * slip_f
     Fyr = -Cr * slip_r
 
