@@ -92,7 +92,7 @@ class Simulator:
         )
 
     def show_raw_state(self, state, control):
-        x, vx, y, vy, h, r = state
+        x, vx, y, vy, h, r, w = state
         vx_l = vx * np.cos(h) + vy * np.sin(h)
         vy_l = -vx * np.sin(h) + vy * np.cos(h)
 
@@ -101,7 +101,7 @@ class Simulator:
         self.draw_text(f"x: {x:.2f}", 800, 120)
         self.draw_text(f"y: {y:.2f}", 800, 140)
         self.draw_text(f"vx: {vx:.2f}", 800, 160)
-        self.draw_text(f"vy: {vy:.2f}", 800, 180)
+        self.draw_text(f"w: {w:.2f}", 800, 180)
         self.draw_text(f"h: {h:.2f}", 800, 200)
         self.draw_text(f"r: {r:.2f}", 800, 220)
         self.draw_text(f"vx_l: {vx_l:.2f}", 800, 240)

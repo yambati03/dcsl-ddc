@@ -1,36 +1,35 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.integrate import odeint
+from scipy.integrate import odeint, solve_ivp
+from dynamics import DriftDynamicsModel
 
+model = DriftDynamicsModel(
+    Izz=0.08502599670201208,
+    m=4.202,
+    l_f=0.1651,
+    l_r=0.1651,
+    Cf=79.0,
+    Cr=70.0,
+    mu=1.0,
+    R_e=0.1,
+)
 
-# Define the dynamics model
-def vehicle_dynamics(state, t, vx, steering):
-    beta, r = state  # Unpack state: sideslip angle and yaw rate
-    l_f, l_r = 0.1651, 0.1651  # Vehicle length (m)
-    Cf, Cr = 79.0, 70.0  # Cornering stiffness (N/rad)
-    m, iz = 4.202, 0.0398378  # Mass (kg) and moment of inertia (kg*m^2)
+def vehicle_dynamics(t, state, V, delta, omega_R):
+    beta, r = state
+    Vx = V * np.cos(beta)
+    Vy = V * np.sin(beta)
 
-    # Slip angles
-    slip_f = np.arctan((vx * np.sin(beta) + l_f * r) / vx) - steering
-    slip_r = np.arctan((vx * np.sin(beta) - l_r * r) / vx)
+    _, beta_dot, r_dot, w_dot = model.dynamics(Vx, Vy, r, omega_R, delta, 0)
 
-    # Lateral forces
-    Fyf = -Cf * slip_f
-    Fyr = -Cr * slip_r
+    return [beta_dot, r_dot]
 
-    # Dynamics equations
-    d_beta = r - (Fyf * np.cos(steering) + Fyr) / (m * vx)
-    d_r = (l_f * Fyf * np.cos(steering) - l_r * Fyr) / iz
+V = 2.0
+delta = -0.34
+omega_R = 5.0
 
-    return [d_beta, d_r]
-
-
-# Simulation parameters
-vx = 1.2
-steering = -0.34
 ts = np.linspace(0, 2, 500)
 beta_values = np.linspace(-0.5, 0.5, 20)
-r_values = np.linspace(-2, 2, 20)
+r_values = np.linspace(-5, 5, 20)
 
 # Initialize mesh for vector field
 B, R = np.meshgrid(beta_values, r_values)
@@ -40,17 +39,17 @@ plt.figure(figsize=(10, 8))
 for i in range(B.shape[0]):
     for j in range(B.shape[1]):
         state0 = [B[i, j], R[i, j]]
-        traj = odeint(vehicle_dynamics, state0, ts, args=(vx, steering))
-        plt.plot(traj[:, 0], traj[:, 1], "b-", alpha=0.3)
+        
+        if i % 2 == 0 and j % 2 == 0:
+            sol = solve_ivp(vehicle_dynamics, [0, 2], state0, t_eval=ts, args=(V, delta, omega_R))
+            plt.plot(sol.y[0], sol.y[1], "b-", alpha=0.5)
 
-        d_state = vehicle_dynamics([B[i, j], R[i, j]], 0, vx, steering)
+        d_state = vehicle_dynamics(0, [B[i, j], R[i, j]], V, delta, omega_R)
         dB[i, j], dR[i, j] = d_state
 
-plt.quiver(B, R, dB, dR, color="red", angles="xy", alpha=0.7)
-
-
+plt.quiver(B, R, dB, dR, color="red", angles="xy", alpha=0.6, width=0.002, scale=5000)
 plt.xlabel("Sideslip angle (beta)")
 plt.ylabel("Yaw rate (r)")
-plt.title("Phase plot for sideslip angle (veta) and yaw rate (r)")
+plt.title("Phase plot for sideslip angle (beta) and yaw rate (r)")
 plt.grid()
 plt.show()

@@ -93,12 +93,15 @@ class LSTMModel(nn.Module):
 def train(n_epochs: int, device: str, bags: Tuple[str], lookback: int):
     X_train, y_train, X_test, y_test = create_dataset(bags, lookback)
 
+    print(f"Train set size: {X_train.shape[0]}")
+    print(f"Test set size: {X_test.shape[0]}")
+
     model = LSTMModel(input_size=5, hidden_size=64, num_layers=2, output_size=1).to(
         device
     )
     optimizer = optim.Adam(model.parameters())
     loss_fn = nn.MSELoss()
-    loader = DataLoader(TensorDataset(X_train, y_train), shuffle=True, batch_size=8)
+    loader = DataLoader(TensorDataset(X_train, y_train), shuffle=True, batch_size=16)
 
     train_rmses = []
     test_rmses = []
@@ -136,6 +139,9 @@ def train(n_epochs: int, device: str, bags: Tuple[str], lookback: int):
 
             train_rmses.append(train_loss)
             test_rmses.append(test_loss)
+
+    # Save the model
+    torch.save(model.state_dict(), "model.pth")
 
 
 if __name__ == "__main__":

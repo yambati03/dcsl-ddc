@@ -6,7 +6,9 @@ from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
 import tire
 from simulator import Simulator
+import torch
 from load_log import load_ground_truth_from_bag
+from train_lstm import LSTMModel
 
 
 def pretty(d):
@@ -76,24 +78,6 @@ def step(state, control, dt=0.01):
     d_vy = -vx * r + ((Fyr + Fyf * np.cos(steering)) / m)  # m/s^2
     d_r = (l_f * Fyf * np.cos(steering) - l_r * Fyr) / iz  # rad/s^2
 
-    # pretty(
-    #     {
-    #         "d_vx": d_vx,
-    #         "d_vy": d_vy,
-    #         "d_r": d_r,
-    #         "vx": vx,
-    #         "vy": vy,
-    #         "r": r,
-    #         "steering": steering,
-    #         "Fyf": Fyf,
-    #         "Fyr": Fyr,
-    #         "slip_f": slip_f,
-    #         "slip_r": slip_r,
-    #         "d_vy (c1)": -vx * r,
-    #         "d_vy (c2)": ((Fyr + Fyf * np.cos(steering)) / m),
-    #     }
-    # )
-
     vx += d_vx * dt
     vy += d_vy * dt
     r += d_r * dt
@@ -108,6 +92,22 @@ def step(state, control, dt=0.01):
     h += r * dt
 
     return (x, vx_g, y, vy_g, h, r)
+
+
+def step_lstm(state, input, model, dt=0.01):
+    output = model(input).squeeze().detach().cpu().numpy()
+    x, _, y, _, h, _ = state
+
+    vx = output[0]
+    vy = output[1]
+    r = output[2]
+
+    # Update state
+    x += vx * dt
+    y += vy * dt
+    h += r * dt
+
+    return (x, vx, y, vy, h, r)
 
 
 # wrap to -pi,pi
@@ -132,14 +132,18 @@ def get_local_velocity(vx_g, vy_g, h):
 def main(bag, plot_predicted, plot_state):
     sim = Simulator()
 
+    model = LSTMModel(input_size=5, hidden_size=64, num_layers=2, output_size=1).to(
+        "cuda"
+    )
+    model.load_state_dict(torch.load("model.pth"))
+    model.eval()
+
     log = load_ground_truth_from_bag(bag)
     lookahead_steps = 50
 
     # Initialize state
     t = log[:, 0] - log[0, 0]
     t = np.linspace(0, t[-1], t.shape[0])
-
-    print(t[1] - t[0])
 
     x = log[:, 1]
     y = log[:, 2]
@@ -174,8 +178,7 @@ def main(bag, plot_predicted, plot_state):
         ax[1][1].set_title("Velocity (y)")
         plt.show()
 
-    for i in range(1, log.shape[0] - lookahead_steps):
-        print(i)
+    for i in range(3, log.shape[0] - lookahead_steps):
         state = (x[i], vx[i], y[i], vy[i], h[i], r[i])
         control = (steering[i], throttle[i])
 
@@ -196,7 +199,25 @@ def main(bag, plot_predicted, plot_state):
             predicted_states = [state]
 
             for j in range(i + 1, i + lookahead_steps):
-                state = step(state, control, dt=(t[j] - t[j - 1]))
+                # state = step(state, control, dt=(t[j] - t[j - 1]))
+
+                inp = (
+                    torch.Tensor(
+                        np.vstack(
+                            (
+                                steering[i - 2 : i + 1],
+                                throttle[i - 2 : i + 1],
+                                vx[i - 2 : i + 1],
+                                vy[i - 2 : i + 1],
+                                r[i - 2 : i + 1],
+                            )
+                        ).T
+                    )
+                    .float()
+                    .to("cuda")
+                )
+                state = step_lstm(state, inp, model, dt=(t[j] - t[j - 1]))
+
                 predicted_states.append(state)
                 control = (steering[j], throttle[j])
 
@@ -207,11 +228,6 @@ def main(bag, plot_predicted, plot_state):
             ).T
 
             sim.draw_polyline(predicted_future_traj, color=(0, 255, 0))
-            # sim.draw_car(
-            #     predicted_states[-1][0],
-            #     predicted_states[-1][2],
-            #     predicted_states[-1][4],
-            # )
 
         actual_future_traj = np.vstack(
             [x[i : i + lookahead_steps], y[i : i + lookahead_steps]]
@@ -219,9 +235,6 @@ def main(bag, plot_predicted, plot_state):
 
         sim.draw_polyline(actual_future_traj)
         sim.draw_car(x[i], y[i], h[i])
-        # sim.draw_car(
-        #     x[i + lookahead_steps], y[i + lookahead_steps], h[i + lookahead_steps]
-        # )
 
         sim.draw_text(f"Ground Truth: {bag}", 20, 40)
 
