@@ -26,13 +26,13 @@ class MPC:
         self.dt = dt
         self.simSteps = round(time_range / dt)
 
-        # State: [x, y, vx, vy, h, r]
+        # State: [x, y, vx, vy, h, r, beta]
         self.state = init_state
 
         # Control: [steering, throttle]
         self.control = np.array([0.0, 0.0])
 
-        self.Q = np.diag([5.0, 5.0, 0.0, 0.0, 0.1, 0.0])
+        self.Q = np.diag([10.0, 10.0, 0.0, 0.0, 0.0, 0.0, -0.5])
         self.R = np.diag([0.0, 0.0])
 
         self.min_delta_dot, self.max_delta_dot = -np.pi / 2, np.pi / 2
@@ -52,7 +52,7 @@ class MPC:
         return path[-1]
 
     def step_kinematic(self, state: np.ndarray, control: np.ndarray, dt=0.01):
-        x, y, vx, vy, h, r = state
+        x, y, vx, vy, h, r, beta = state
         steering, throttle = control
 
         l_f, l_r = 0.1651, 0.1651  # m
@@ -73,10 +73,12 @@ class MPC:
         y += vy_g * dt
         h += r * dt
 
-        return np.array([x, y, vx, vy, h % (2 * np.pi), r])
+        return np.array(
+            [x, y, vx, vy, h % (2 * np.pi), r, np.arctan2(vy, vx) if vx != 0 else 0]
+        )
 
     def step(self, state: np.ndarray, control: np.ndarray, dt=0.01) -> np.ndarray:
-        x, y, vx, vy, h, r = state
+        x, y, vx, vy, h, r, beta = state
         steering, throttle = control
 
         if vx < 0.05:
@@ -112,14 +114,14 @@ class MPC:
         y += vy_g * dt
         h += r * dt
 
-        return np.array([x, y, vx, vy, h % (2 * np.pi), r])
+        return np.array(
+            [x, y, vx, vy, h % (2 * np.pi), r, np.arctan2(vy, vx) if vx != 0 else 0]
+        )
 
     def angle_diff(self, theta1, theta2):
         difference = (theta1 - theta2) % (2 * np.pi)
         if difference > np.pi:
             difference -= 2 * np.pi
-
-        # Return the absolute value to get the smallest angle
         return abs(difference)
 
     def mpc_cost(
@@ -135,31 +137,28 @@ class MPC:
             U = control_seq[2 * i : 2 * i + 2]
             ref_state = self.find_desired_state(X[:2], path)
 
-            X_diff = X - np.array([ref_state[0], ref_state[1], 0, 0, ref_state[2], 0])
+            X_diff = X - np.array(
+                [ref_state[0], ref_state[1], 0, 0, ref_state[2], 0, 0]
+            )
             X_diff[4] = self.angle_diff(X[4], ref_state[2])
 
             J += X_diff.T @ self.Q @ X_diff + U.T @ self.R @ U
             X = self.step(X, U, self.dt)
-
-        # Add terminal cost
-        ref_state = self.find_desired_state(X[:2], path)
-        X_diff = X - np.array([ref_state[0], ref_state[1], 0, 0, ref_state[2], 0])
-        X_diff[4] = self.angle_diff(X[4], ref_state[2])
-        J += X_diff.T @ self.Q @ X_diff
 
         return J
 
     def solve(
         self, init_state: np.ndarray, init_controls: np.ndarray, path: np.ndarray
     ):
-        bounds = [(-0.34, 0.34), (0.0, 5.0)] * self.predHorizon
+        bounds = [(-np.pi / 4, np.pi / 4), (0.0, 6.0)] * self.predHorizon
 
-        delta_steering = np.pi / 8
-        delta_throttle = 2.0
+        delta_steering = 4 * np.pi / 3
+        delta_throttle = 50.0
         delta_controls = np.array([delta_steering, delta_throttle] * self.predHorizon)
 
         constraint = LinearConstraint(
-            np.eye(2 * self.predHorizon) - np.eye(2 * self.predHorizon, k=2),
+            (np.eye(2 * self.predHorizon) - np.eye(2 * self.predHorizon, k=2))
+            / self.dt,
             -delta_controls,
             delta_controls,
         )
@@ -208,6 +207,8 @@ class MPC:
                         "x": self.state[0],
                         "y": self.state[1],
                         "theta": self.state[4],
+                        "steering": self.control[0],
+                        "throttle": self.control[1],
                     }
                 )
 
@@ -223,11 +224,13 @@ class MPC:
 
 
 if __name__ == "__main__":
-    init_state = np.array([0, -2.0, 0, 0, 0, 0])
+    init_state = np.array([0, -1.5, 0.5, 0, 0, 0, 0])
     mpc = MPC(5, init_state, time_range=10, debug=False)
 
+    r = 1.5
     theta = np.linspace(0, 2 * np.pi, 100)
-    path = np.column_stack((2 * np.cos(theta), 2 * np.sin(theta), theta + np.pi / 2))
+    path = np.column_stack((r * np.cos(theta), r * np.sin(theta), theta + np.pi / 2))
+
     path[:, 2] = path[:, 2] % (2 * np.pi)
 
     mpc.run(path)
