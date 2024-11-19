@@ -56,7 +56,7 @@ class SimulatorNode(Node):
     def update_sim(self):
         self.sim.clear_img()
 
-        self.step(dt=self.update_rate_)
+        self.step_old(dt=self.update_rate_)
 
         self.sim.draw_steering(self.control[0])
         self.sim.show_raw_state(self.state.to_tuple(), self.control)

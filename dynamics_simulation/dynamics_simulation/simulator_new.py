@@ -1,60 +1,60 @@
 import cv2
 import numpy as np
+from transforms import get_transform_matrix, get_rotation_matrix
 
 
 class Simulator:
-    def __init__(self, origin=(512, 512)):
-        self.img = np.zeros((1024, 1024, 3), np.uint8)
-        self.img.fill(255)
-        self.origin = origin
-        self.w = 11  # m
+    def __init__(self, world_size: np.ndarray, resolution: int):
+        self.image_size = world_size * resolution
+        self.resolution = resolution
+        self.origin = (self.image_size / 2).astype(int)
 
-        self.resolution = self.img.shape[0] / self.w
+        self._image = np.full((*self.image_size, 3), 255, dtype=np.uint8)
 
         theta = -np.pi / 2
         cos = np.cos(theta)
         sin = np.sin(theta)
 
+        # self.T is the transformation matrix between the world and image frames.
+        # +x should be facing up in the image, so we rotate by -pi/2.
         self.T = np.array(
             [[cos, sin, self.origin[0]], [sin, -cos, self.origin[1]], [0, 0, 1]]
         )
         self.T_rot = np.array([[cos, sin], [sin, -cos]])
 
-    def get_img(self):
-        return self.img
+    def get_image(self) -> np.ndarray:
+        return self._image
 
-    def draw_frame(self):
+    def clear_image(self, should_draw_frame=True):
+        self._image.fill(255)
+
+        if should_draw_frame:
+            self.draw_frame()
+
+    def draw_frame(self, arrow_length=40):
+        cv2.circle(self._image, self.origin, radius=4, color=(0, 0, 255), thickness=-1)
         cv2.arrowedLine(
-            self.img, self.origin, (self.origin[0], self.origin[1] - 40), (0, 0, 0), 1
+            self._image,
+            self.origin,
+            (self.origin[0], self.origin[1] - arrow_length),
+            (0, 0, 0),
+            1,
         )
         cv2.arrowedLine(
-            self.img, self.origin, (self.origin[0] - 40, self.origin[1]), (0, 0, 0), 1
+            self._image,
+            self.origin,
+            (self.origin[0] - arrow_length, self.origin[1]),
+            (0, 0, 0),
+            1,
         )
 
-    def draw_point(self, point, color=(0, 0, 0)):
-        transformed_point = self.vicon_to_image(point).astype(int)
-        cv2.circle(
-            self.img,
-            (transformed_point[0], transformed_point[1]),
-            radius=4,
-            color=color,
-            thickness=-1,
-        )
-
-    def clear_img(self):
-        self.img.fill(255)
-
-        # Draw origin and coordinate frame
-        cv2.circle(self.img, self.origin, radius=4, color=(0, 0, 255), thickness=-1)
-        self.draw_frame()
-
-    def vicon_to_image(self, point):
+    def world_to_image(self, point: np.ndarray) -> np.ndarray:
         transformed_point = self.T @ np.array(
             [point[0] * self.resolution, point[1] * self.resolution, 1]
         )
         return transformed_point[:2]
 
-    def vicon_to_image_rot(self, point):
+    def world_to_image_rot(self, point: np.ndarray) -> np.ndarray:
         return self.T_rot @ np.array(
             [point[0] * self.resolution, point[1] * self.resolution]
         )
@@ -118,10 +118,6 @@ class Simulator:
         self.draw_text(f"vy_l: {vy_l:.2f}", 800, 260)
         self.draw_text(f"steer: {control[0]:.2f}", 800, 280)
         self.draw_text(f"throttle: {control[1]:.2f}", 800, 300)
-
-    def show_dict(self, data):
-        for i, (key, value) in enumerate(data.items()):
-            self.draw_text(f"{key}: {value:.2f}", 20, 100 + i * 20)
 
     def draw_steering(self, steering):
         def map(val, in_l, in_h, out_low, out_high):

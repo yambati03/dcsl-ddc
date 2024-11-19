@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import math
 from scipy.optimize import minimize, LinearConstraint
 
+
 # Step of the pendulum system
 def system_step(theta, dtheta, tau, l, k, m, g, dt):
 
@@ -12,8 +13,9 @@ def system_step(theta, dtheta, tau, l, k, m, g, dt):
     # Update the angular velocity and angle
     dtheta_next = dtheta + ddtheta * dt
     theta_next = theta + dtheta_next * dt
-    
+
     return (theta_next, dtheta_next)
+
 
 def mpc_cost(tau, tau_ini, theta_ref, theta0, dtheta0, l, k, m, g, dt, Q11, Q22, R, N):
 
@@ -33,12 +35,33 @@ def mpc_cost(tau, tau_ini, theta_ref, theta0, dtheta0, l, k, m, g, dt, Q11, Q22,
         theta = theta + dtheta * dt
 
         # Update cost
-        cost += Q11 * dtheta**2 + Q22 * (theta_ref - theta)**2 + R * (tau[idx] - tau_ini[idx])**2
+        cost += (
+            Q11 * dtheta**2
+            + Q22 * (theta_ref - theta) ** 2
+            + R * (tau[idx] - tau_ini[idx]) ** 2
+        )
 
     return cost
 
+
 # Solve MPC optimization problem
-def solve_mpc(theta_ref, theta, dtheta, tau_ini, l, k, m, g, dt, Q11, Q22, R, N, tau_max, delta_tau_max):
+def solve_mpc(
+    theta_ref,
+    theta,
+    dtheta,
+    tau_ini,
+    l,
+    k,
+    m,
+    g,
+    dt,
+    Q11,
+    Q22,
+    R,
+    N,
+    tau_max,
+    delta_tau_max,
+):
 
     # Linear constraints on the rate of change of tau: -delta_tau_max <= tau[i+1] - tau[i] <= delta_tau_max for all i in the N - 1
     # Implemented using LinearConstraint as -delta_tau_max <= delta_tau_matrix * tau <= delta_tau_max
@@ -48,8 +71,10 @@ def solve_mpc(theta_ref, theta, dtheta, tau_ini, l, k, m, g, dt, Q11, Q22, R, N,
     # We need a constraint on the rate of change of tau[0] respect to its previous value, which is tau_ini[0]
     first_element_matrix = np.zeros([N, N])
     first_element_matrix[0, 0] = 1
-    constraint2 = LinearConstraint(first_element_matrix, tau_ini[0]-delta_tau_max, tau_ini[0]+delta_tau_max)
-    
+    constraint2 = LinearConstraint(
+        first_element_matrix, tau_ini[0] - delta_tau_max, tau_ini[0] + delta_tau_max
+    )
+
     # Add constraints
     delta_tau_constraint = [constraint1, constraint2]
 
@@ -61,12 +86,19 @@ def solve_mpc(theta_ref, theta, dtheta, tau_ini, l, k, m, g, dt, Q11, Q22, R, N,
     dtheta0 = dtheta
 
     # Minimization
-    result = minimize(mpc_cost, tau_ini, args=(tau_ini, theta_ref, theta0, dtheta0, l, k, m, g, dt, Q11, Q22, R, N), bounds=bounds, constraints=delta_tau_constraint)
+    result = minimize(
+        mpc_cost,
+        tau_ini,
+        args=(tau_ini, theta_ref, theta0, dtheta0, l, k, m, g, dt, Q11, Q22, R, N),
+        bounds=bounds,
+        constraints=delta_tau_constraint,
+    )
 
     # Extract the optimal control sequence
     tau_mpc = result.x
 
     return tau_mpc
+
 
 # ---------- SIMULATION INITIALISATION ----------
 
@@ -83,7 +115,7 @@ dt = 0.1
 time_range = 10
 
 # Simulation steps
-L = round(time_range/dt)
+L = round(time_range / dt)
 
 # Init time
 time = 0
@@ -108,9 +140,9 @@ dtheta[0] = dtheta0
 N = 20
 
 # Cost weights
-Q11 = 0.1 # angular speed weight
-Q22 = 1 # angular position weight
-R = 0.1 # control input weight
+Q11 = 0.1  # angular speed weight
+Q22 = 1  # angular position weight
+R = 0.1  # control input weight
 
 # Max torque allowed
 tau_max = 7
@@ -154,18 +186,34 @@ for idx_m in range(len(m_V)):
 
         # Generate reference setpoint
         if time < 5:
-            theta_ref[idx] = math.pi # 180 deg
+            theta_ref[idx] = math.pi  # 180 deg
         else:
-            theta_ref[idx] = math.pi*0.5 # 90 deg
-        
+            theta_ref[idx] = math.pi * 0.5  # 90 deg
+
         # Increment time
         time += dt
 
         # ---------- CONTROL SYSTEM LOOP ----------
-        
+
         # Find optimal sequence for the next N steps
-        tau_mpc = solve_mpc(theta_ref[idx], theta[idx], dtheta[idx], tau_ini, l_est, k_est, m_est, g_est, dt, Q11, Q22, R, N, tau_max, delta_tau_max)
-        
+        tau_mpc = solve_mpc(
+            theta_ref[idx],
+            theta[idx],
+            dtheta[idx],
+            tau_ini,
+            l_est,
+            k_est,
+            m_est,
+            g_est,
+            dt,
+            Q11,
+            Q22,
+            R,
+            N,
+            tau_max,
+            delta_tau_max,
+        )
+
         # Use first element of control input optimal solution
         tau[idx] = tau_mpc[0]
 
@@ -175,7 +223,9 @@ for idx_m in range(len(m_V)):
         # ---------- SIMULATION LOOP  ----------
 
         # Run dynamic system - pendulum
-        (theta[idx+1], dtheta[idx+1]) = system_step(theta[idx], dtheta[idx], tau[idx], l, k, m_V[idx_m], g, dt)
+        (theta[idx + 1], dtheta[idx + 1]) = system_step(
+            theta[idx], dtheta[idx], tau[idx], l, k, m_V[idx_m], g, dt
+        )
 
     # Append result for this simulation
     theta_V.append(theta)
@@ -185,16 +235,24 @@ for idx_m in range(len(m_V)):
 
 plt.subplot(2, 1, 1)
 for idx_m in range(len(m_V)):
-    plt.plot(np.arange(L+1)*dt, theta_V[idx_m][:]*180/math.pi, label=f"Response - Mass = {m_V[idx_m]} kg")
-#plt.plot(np.arange(L+1)*dt, dtheta[:]*180/math.pi, label="Angular speed [deg/s]")
-plt.plot(np.arange(L)*dt, theta_ref*180/math.pi, '--', label="Setpoint")
+    plt.plot(
+        np.arange(L + 1) * dt,
+        theta_V[idx_m][:] * 180 / math.pi,
+        label=f"Response - Mass = {m_V[idx_m]} kg",
+    )
+# plt.plot(np.arange(L+1)*dt, dtheta[:]*180/math.pi, label="Angular speed [deg/s]")
+plt.plot(np.arange(L) * dt, theta_ref * 180 / math.pi, "--", label="Setpoint")
 plt.ylabel(r"$\theta$ [deg]")
 plt.legend()
 plt.grid()
 
 plt.subplot(2, 1, 2)
 for idx_m in range(len(m_V)):
-    plt.plot(np.arange(L)*dt, tau_V[idx_m], label=f"Control command - Mass = {m_V[idx_m]} kg")
+    plt.plot(
+        np.arange(L) * dt,
+        tau_V[idx_m],
+        label=f"Control command - Mass = {m_V[idx_m]} kg",
+    )
 plt.ylabel(r"$\tau$ [Nm]")
 plt.xlabel("Time")
 plt.legend()
