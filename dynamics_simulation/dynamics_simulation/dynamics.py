@@ -16,15 +16,12 @@ class DriftDynamicsModel:
         self.R_e = R_e  # Effective rear wheel radius
 
     def compute_beta(self, Vx, Vy):
-        """Compute sideslip angle beta."""
         return np.arctan2(Vy, Vx)
 
     def front_slip_angle(self, V, beta, r, delta):
-        """Compute front slip angle alpha_F."""
         return np.arctan2(V * np.sin(beta) + self.l_f * r, V * np.cos(beta)) - delta
 
     def rear_slip_angle(self, V, beta, r):
-        """Compute rear slip angle alpha_R."""
         return np.arctan2(V * np.sin(beta) - self.l_r * r, V * np.cos(beta))
 
     def rear_slip_ratio(self, omega_R, V, beta):

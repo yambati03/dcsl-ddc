@@ -3,7 +3,7 @@ from rclpy.node import Node
 from ackermann_msgs.msg import AckermannDriveStamped
 from dataclasses import dataclass
 from dynamics_simulation.simulator import Simulator
-from dynamics_simulation.dynamics import DriftDynamicsModel
+from dynamics_simulation.dynamics_new import DynamicBicycleModel
 import cv2
 import numpy as np
 
@@ -32,35 +32,50 @@ class SimulatorNode(Node):
         )
 
         self.sim = Simulator()
-        self.control = (0.0, 0.0)
+        self.control = np.zeros(2)
         self.state = State()
 
         self.update_rate_ = 0.01  # 100 Hz
         self.timer = self.create_timer(self.update_rate_, self.update_sim)
 
-        self.dynamics = DriftDynamicsModel(
+        self.model = DynamicBicycleModel(
             Izz=0.08502599670201208,
             m=4.202,
             l_f=0.1651,
             l_r=0.1651,
-            Cf=79.0,
-            Cr=70.0,
+            Cf=41.0,
+            Cx=92.5,
+            Cy=106.0,
             mu=1.0,
-            R_e=0.05,
+            R=0.05,
+            J=0.0005,
+            init_state=np.zeros(7),
         )
 
     def ackermann_callback(self, msg):
         # msg.drive.steering_angle
-        self.control = (msg.drive.steering_angle, msg.drive.speed)
+        self.control[0] = msg.drive.steering_angle
+        self.control[1] = msg.drive.speed
 
     def update_sim(self):
         self.sim.clear_img()
-
-        self.step_old(dt=self.update_rate_)
+        self.model.step(self.control, dt=self.update_rate_)
 
         self.sim.draw_steering(self.control[0])
-        self.sim.show_raw_state(self.state.to_tuple(), self.control)
-        self.sim.draw_car(self.state.x, self.state.y, self.state.h)
+        self.sim.show_dict(
+            {
+                "x": self.model.state[0],
+                "y": self.model.state[1],
+                "h": self.model.state[4],
+                "V": self.model.state[3],
+                "beta": self.model.state[4],
+                "r": self.model.state[5],
+                "w": self.model.state[6],
+                "steering": self.control[0],
+                "torque": self.control[1],
+            }
+        )
+        self.sim.draw_car(self.model.state[0], self.model.state[1], self.model.state[2])
 
         cv2.imshow("Simulator", self.sim.get_img())
         cv2.waitKey(1)
@@ -109,10 +124,6 @@ class SimulatorNode(Node):
         V_dot, beta_dot, r_dot, w_dot = self.dynamics.dynamics(
             Vx, Vy, r, w, steering, torque, logger=self.get_logger()
         )
-
-        # self.get_logger().info(f"Vx: {Vx}, Vy: {Vy}, r: {r}, w: {w}, steering: {steering}, torque: {torque}")
-        # self.get_logger().info(f"V_dot: {V_dot}, beta_dot: {beta_dot}, r_dot: {r_dot}, w_dot: {w_dot}")
-        # self.get_logger().info("====================================")
 
         # Compute current V and beta
         V = np.sqrt(Vx**2 + Vy**2)
