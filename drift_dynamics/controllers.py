@@ -30,11 +30,14 @@ class MPC:
         self.controls_history = []
 
         # (x, y, h, V, beta, r, w)
-        self.Q = np.diag([10.0, 10.0, 2.0, 0.0, 0.0, 0.0, 0.0])
+        self.Q = np.diag([1.2, 1.2, 1.0, 0.0, 0.0, 0.0, 0.0])
         self.R = np.diag([0.0, 0.0])
 
-        self.min_delta_dot, self.max_delta_dot = -np.pi / 2, np.pi / 2
-        self.min_acc, self.max_acc = -2, 2
+        self.min_delta_dot, self.max_delta_dot = -np.pi, np.pi
+        self.min_T_dot, self.max_T_dot = -25, 25
+
+        self.min_delta, self.max_delta = -np.pi / 6, np.pi / 6
+        self.min_T, self.max_T = 0, 5
 
         self.model = model
         self.debug = debug
@@ -73,6 +76,8 @@ class MPC:
             )
             X_diff[2] = self.angle_diff(X[2], ref_state[2])
 
+            X_diff = X_diff / np.array([0.1, 0.1, 0.26, 1.0, 1.0, 1.0, 1.0])
+
             J += X_diff.T @ self.Q @ X_diff + U.T @ self.R @ U
             X = self.model.step_and_return(X, U, self.dt)
 
@@ -81,17 +86,23 @@ class MPC:
     def solve(
         self, init_state: np.ndarray, init_controls: np.ndarray, path: np.ndarray
     ):
-        bounds = [(-np.pi / 4, np.pi / 4), (0.0, 6.0)] * self.predHorizon
+        bounds = [
+            (self.min_delta, self.max_delta),
+            (self.min_T, self.max_T),
+        ] * self.predHorizon
 
-        delta_steering = 4 * np.pi / 3
-        delta_throttle = 50.0
-        delta_controls = np.array([delta_steering, delta_throttle] * self.predHorizon)
+        min_control_dots = np.array(
+            [self.min_delta_dot, self.min_T_dot] * self.predHorizon
+        )
+        max_control_dots = np.array(
+            [self.max_delta_dot, self.max_T_dot] * self.predHorizon
+        )
 
         constraint = LinearConstraint(
             (np.eye(2 * self.predHorizon) - np.eye(2 * self.predHorizon, k=2))
             / self.dt,
-            -delta_controls,
-            delta_controls,
+            min_control_dots,
+            max_control_dots,
         )
 
         result = minimize(

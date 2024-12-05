@@ -45,14 +45,14 @@ Derived from https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10349953
 
 
 class DynamicBicycleModel(DynamicsModel):
-    def __init__(self, Izz, m, l_f, l_r, Cf, Cx, Cy, mu, R, J, init_state: np.ndarray):
+    def __init__(self, Izz, m, Lf, Lr, Cf, Cx, Cy, mu, R, J, init_state: np.ndarray):
         super().__init__(init_state)
 
         # Vehicle parameters
         self.Izz = Izz  # Moment of inertia around z-axis
         self.m = m  # Mass of vehicle
-        self.l_f = l_f  # Distance from CoG to front axle
-        self.l_r = l_r  # Distance from CoG to rear axle
+        self.Lf = Lf  # Distance from CoG to front axle
+        self.Lr = Lr  # Distance from CoG to rear axle
         self.Cf = Cf  # Front cornering stiffness
         self.Cx = Cx  # Longitudinal stiffness
         self.Cy = Cy  # Lateral stiffness
@@ -61,10 +61,10 @@ class DynamicBicycleModel(DynamicsModel):
         self.J = J  # Drivetrain inertia
 
     def front_slip_angle(self, V, beta, r, delta):
-        return np.arctan2(V * np.sin(beta) + self.l_f * r, V * np.cos(beta)) - delta
+        return np.arctan2(V * np.sin(beta) + self.Lf * r, V * np.cos(beta)) - delta
 
     def rear_slip_angle(self, V, beta, r):
-        return np.arctan2(V * np.sin(beta) - self.l_r * r, V * np.cos(beta))
+        return np.arctan2(V * np.sin(beta) - self.Lr * r, V * np.cos(beta))
 
     def rear_slip_ratio(self, omega_R, V, beta):
         return (self.R * omega_R - V * np.cos(beta)) / max(
@@ -76,7 +76,7 @@ class DynamicBicycleModel(DynamicsModel):
 
         # Front lateral force with saturation
         FyF = -self.Cf * alpha_F
-        FzF = self.m * 9.81 * self.l_r / (self.l_f + self.l_r)
+        FzF = self.m * 9.81 * self.Lr / (self.Lf + self.Lr)
         FyF = np.clip(FyF, -self.mu * FzF, self.mu * FzF)
 
         # Combined-slip model for rear tire forces
@@ -87,7 +87,7 @@ class DynamicBicycleModel(DynamicsModel):
         if f == 0:
             return 0, 0, 0
 
-        FzR = self.m * 9.81 * self.l_f / (self.l_f + self.l_r)
+        FzR = self.m * 9.81 * self.Lf / (self.Lf + self.Lr)
         F = f if f <= self.mu * FzR else self.mu * FzR
 
         FxR = (F * self.Cx * s) / (f * (s + 1))
@@ -96,7 +96,7 @@ class DynamicBicycleModel(DynamicsModel):
         return FyF, FxR, FyR
 
     def compute_r_dot(self, FyF, FyR, delta):
-        return (1 / self.Izz) * (self.l_f * FyF * np.cos(delta) - self.l_r * FyR)
+        return (1 / self.Izz) * (self.Lf * FyF * np.cos(delta) - self.Lr * FyR)
 
     def compute_V_dot(self, FxR, FyF, FyR, beta, delta):
         return (
@@ -108,13 +108,13 @@ class DynamicBicycleModel(DynamicsModel):
             FyF * np.cos(delta - beta) - FxR * np.sin(beta) + FyR * np.cos(beta)
         ) / (self.m * V) - r
 
-    def compute_w_dot(self, torque, FxR):
-        return (torque - self.R * FxR) / self.J
+    def compute_w_dot(self, T, FxR):
+        return (T - self.R * FxR) / self.J
 
     def compute_dynamics(self, state: np.ndarray, control: np.ndarray):
         # Unpack state and control
         _, _, _, V, beta, r, w = state
-        delta, torque = control
+        delta, T = control
 
         # Compute slip angles and slip ratio
         alpha_F = self.front_slip_angle(V, beta, r, delta)
@@ -128,7 +128,7 @@ class DynamicBicycleModel(DynamicsModel):
         r_dot = self.compute_r_dot(FyF, FyR, delta)
         V_dot = self.compute_V_dot(FxR, FyF, FyR, beta, delta)
         beta_dot = self.compute_beta_dot(FyF, FxR, FyR, beta, r, V, delta)
-        w_dot = self.compute_w_dot(torque, FxR)
+        w_dot = self.compute_w_dot(T, FxR)
 
         return V_dot, beta_dot, r_dot, w_dot
 
@@ -173,8 +173,8 @@ class DynamicBicycleModel(DynamicsModel):
         delta, torque = control  # Include torque to update velocity
 
         # Kinematic equations of motion
-        L = self.l_f + self.l_r  # Total wheelbase
-        beta = np.arctan(self.l_r / L * np.tan(delta))  # Slip angle due to steering
+        L = self.Lf + self.Lr  # Total wheelbase
+        beta = np.arctan(self.Lr / L * np.tan(delta))  # Slip angle due to steering
 
         # Compute velocities in the global frame
         VxG = V * np.cos(h + beta)
