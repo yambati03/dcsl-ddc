@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.integrate import odeint, solve_ivp
+from scipy.integrate import solve_ivp
 from dynamics import DriftDynamicsModel
 
 model = DriftDynamicsModel(
@@ -14,6 +14,7 @@ model = DriftDynamicsModel(
     R_e=0.1,
 )
 
+
 def vehicle_dynamics(t, state, V, delta, omega_R):
     beta, r = state
     Vx = V * np.cos(beta)
@@ -22,6 +23,7 @@ def vehicle_dynamics(t, state, V, delta, omega_R):
     _, beta_dot, r_dot, w_dot = model.dynamics(Vx, Vy, r, omega_R, delta, 0)
 
     return [beta_dot, r_dot]
+
 
 V = 2.0
 delta = -0.34
@@ -39,9 +41,11 @@ plt.figure(figsize=(10, 8))
 for i in range(B.shape[0]):
     for j in range(B.shape[1]):
         state0 = [B[i, j], R[i, j]]
-        
+
         if i % 2 == 0 and j % 2 == 0:
-            sol = solve_ivp(vehicle_dynamics, [0, 2], state0, t_eval=ts, args=(V, delta, omega_R))
+            sol = solve_ivp(
+                vehicle_dynamics, [0, 2], state0, t_eval=ts, args=(V, delta, omega_R)
+            )
             plt.plot(sol.y[0], sol.y[1], "b-", alpha=0.5)
 
         d_state = vehicle_dynamics(0, [B[i, j], R[i, j]], V, delta, omega_R)

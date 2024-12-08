@@ -7,7 +7,7 @@ import cv2
 
 
 # State: (x, y, h, V, beta, r, w)
-init_state = np.array([0, -1.5, 1.04, 1.0, 0.5, 0, 0])
+init_state = np.array([0, 0, 0, 1.0, 0, 0, 0])
 init_state[6] = init_state[3] / 0.05
 
 model = DynamicBicycleModel(
@@ -20,17 +20,41 @@ model = DynamicBicycleModel(
     Cy=15.46,
     mu=1.0,
     R=0.05,
-    J=0.005,
+    J=0.0005,
     init_state=init_state,
 )
 
 mpc = MPC(10, model, time_range=20, debug=False)
 
-r = 1.5
-theta = np.linspace(0, 2 * np.pi, 100)
-path = np.column_stack((r * np.cos(theta), r * np.sin(theta), theta))
+path = None
+path_type = "figure8"
 
-path[:, 2] = path[:, 2] % (2 * np.pi)
+if path_type == "circle":
+    r = 2.0
+    theta = np.linspace(0, 2 * np.pi, 100)
+    path = np.column_stack(
+        (r * np.cos(theta), r * np.sin(theta), (theta + np.pi / 2) % (2 * np.pi))
+    )
+elif path_type == "figure8":
+    r = 2.0
+    theta_left = np.linspace(-np.pi / 2, 3 * np.pi / 2, 100)
+    theta_right = np.linspace(np.pi / 2, -3 * np.pi / 2, 100)
+
+    left_circle = np.column_stack(
+        (
+            r * np.cos(theta_left),
+            r * np.sin(theta_left) + r,
+            (theta_left + np.pi / 2) % (2 * np.pi),
+        )
+    )
+    right_circle = np.column_stack(
+        (
+            r * np.cos(theta_right),
+            r * np.sin(theta_right) - r,
+            (theta_right - np.pi / 2) % (2 * np.pi),
+        )
+    )
+    path = np.vstack((left_circle, right_circle))
 
 print(f"Running MPC for {mpc.simSteps} steps...")
 start_time = time.time()
@@ -54,17 +78,20 @@ for i in range(mpc.simSteps):
 
     sim.draw_steering(control[0])
     sim.draw_car(state[0], state[1], state[2])
-    sim.draw_polyline(path)
+    sim.draw_polyline(path, is_last_heading=True)
 
     # Draw velocity vector
     sim.draw_vec(
         state[0:2],
-        np.array([state[3] * np.cos(state[2]), state[3] * np.sin(state[2])]),
+        np.array([state[3] * np.cos(state[4]), state[3] * np.sin(state[4])]),
         state[2],
     )
 
     x, y, h, V, beta, r, w = state
     delta, torque = control
+
+    desired_pos = mpc.find_desired_state(state, path)
+    sim.draw_point(desired_pos[:2], color=(0, 255, 0))
 
     # Compute slip angles and slip ratio
     alpha_F = model.front_slip_angle(V, beta, r, delta)

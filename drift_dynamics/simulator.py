@@ -85,9 +85,27 @@ class Simulator:
             self.img, (front[0], front[1]), radius=4, color=(0, 0, 255), thickness=-1
         )
 
-    def draw_polyline(self, points, color=(0, 0, 255)):
-        points = np.array([self.vicon_to_image(p) for p in points]).astype(np.int32)
-        cv2.polylines(self.img, [points], isClosed=False, color=color, thickness=2)
+    def draw_polyline(self, points, color=(0, 0, 255), is_last_heading=False):
+
+        if not is_last_heading:
+            points = np.array([self.vicon_to_image(p) for p in points]).astype(np.int32)
+            cv2.polylines(self.img, [points], isClosed=False, color=color, thickness=2)
+        else:
+            positions = np.array(
+                [self.vicon_to_image(p) for p in points[:, :2]]
+            ).astype(np.int32)
+            cv2.polylines(
+                self.img, [positions], isClosed=False, color=color, thickness=2
+            )
+
+            # headings are just radians
+            headings = points[:, 2]
+            for i in range(len(positions)):
+                vec = np.array([np.cos(headings[i]), np.sin(headings[i])])
+                vec = vec / np.linalg.norm(vec)
+
+                if i % 5 == 0:
+                    self.draw_vec(points[i, :2], vec, 0, color=color)
 
     def draw_text(self, text, x, y, color=(0, 0, 0)):
         cv2.putText(
