@@ -6,12 +6,12 @@ class DynamicsModel:
         self.state = state
 
     def _step_kinematic(
-        self, state: np.ndarray, control: np.ndarray, dt=0.01
+        self, state: np.ndarray, control: np.ndarray, theta_path: float, dt=0.01
     ) -> np.ndarray:
         raise NotImplementedError
 
     def _step_dynamic(
-        self, state: np.ndarray, control: np.ndarray, dt=0.01
+        self, state: np.ndarray, control: np.ndarray, theta_path: float, dt=0.01
     ) -> np.ndarray:
         raise NotImplementedError
 
@@ -19,23 +19,25 @@ class DynamicsModel:
         self,
         state: np.ndarray,
         control: np.ndarray,
+        theta_path: float,
         dt=0.01,
         v_idx=3,
         v_threshold=0.05,
     ) -> np.ndarray:
         if state[v_idx] < v_threshold:
-            return self._step_kinematic(state, control, dt=dt)
-        return self._step_dynamic(state, control, dt=dt)
+            return self._step_kinematic(state, control, theta_path, dt=dt)
+        return self._step_dynamic(state, control, theta_path, dt=dt)
 
     def step(
         self,
         control: np.ndarray,
+        theta_path: float,
         dt=0.01,
         v_idx=3,
         v_threshold=0.05,
     ):
         self.state = self.step_and_return(
-            self.state, control, dt=dt, v_idx=v_idx, v_threshold=v_threshold
+            self.state, control, theta_path, dt=dt, v_idx=v_idx, v_threshold=v_threshold
         )
 
 
@@ -113,7 +115,7 @@ class DynamicBicycleModel(DynamicsModel):
 
     def compute_dynamics(self, state: np.ndarray, control: np.ndarray):
         # Unpack state and control
-        _, _, _, V, beta, r, w = state
+        _, _, _, V, beta, r, w, _ = state
         delta, T = control
 
         # Compute slip angles and slip ratio
@@ -132,7 +134,9 @@ class DynamicBicycleModel(DynamicsModel):
 
         return V_dot, beta_dot, r_dot, w_dot
 
-    def _step_dynamic(self, state: np.ndarray, control: np.ndarray, dt=0.01):
+    def _step_dynamic(
+        self, state: np.ndarray, control: np.ndarray, theta_path: float, dt=0.01
+    ):
         """Compute the vehicle's dynamics.
 
         args:
@@ -144,7 +148,7 @@ class DynamicBicycleModel(DynamicsModel):
         V_dot, beta_dot, r_dot, w_dot = self.compute_dynamics(state, control)
 
         # Unpack state
-        x, y, h, V, beta, r, w = state
+        x, y, h, V, beta, r, w, path_dist = state
 
         # Update position
         Vx = V * np.cos(beta)
@@ -164,12 +168,17 @@ class DynamicBicycleModel(DynamicsModel):
         next_state[4] = beta + beta_dot * dt
         next_state[5] = r + r_dot * dt
         next_state[6] = w + w_dot * dt
+        next_state[7] = path_dist + V * np.cos(beta - theta_path) * dt
 
         return next_state
 
-    def _step_kinematic(self, state: np.ndarray, control: np.ndarray, dt=0.01):
+    def _step_kinematic(
+        self, state: np.ndarray, control: np.ndarray, theta_path: float, dt=0.01
+    ):
         # Unpack state and control
-        x, y, h, V, beta, _, _ = state  # Ignore `r` and `w` for initial calculation
+        x, y, h, V, beta, _, _, path_dist = (
+            state  # Ignore `r` and `w` for initial calculation
+        )
         delta, torque = control  # Include torque to update velocity
 
         # Kinematic equations of motion
@@ -195,5 +204,6 @@ class DynamicBicycleModel(DynamicsModel):
         # Update yaw rate and wheel speed for consistency with dynamics
         next_state[5] = (V / L) * np.sin(beta)  # Approximate yaw rate
         next_state[6] = V_new / self.R  # Approximate wheel speed
+        next_state[7] = path_dist + (V * np.cos(beta - theta_path) * dt)
 
         return next_state

@@ -6,8 +6,8 @@ import time
 import cv2
 
 
-# State: (x, y, h, V, beta, r, w)
-init_state = np.array([0, 0, 0, 1.0, 0, 0, 0])
+# State: (x, y, h, V, beta, r, w, s)
+init_state = np.array([0, 0, 0, 1.0, 0, 0, 0, 0])
 init_state[6] = init_state[3] / 0.05
 
 model = DynamicBicycleModel(
@@ -54,7 +54,7 @@ elif path_type == "figure8":
             (theta_right - np.pi / 2) % (2 * np.pi),
         )
     )
-    path = np.vstack((left_circle, right_circle))
+    path = np.vstack((left_circle[:-1, :], right_circle))
 
 print(f"Running MPC for {mpc.simSteps} steps...")
 start_time = time.time()
@@ -70,7 +70,9 @@ for i in range(mpc.simSteps):
     sim.clear_img()
 
     control = mpc.controls_history[i]
-    state = model.step_and_return(state, control, mpc.dt)
+
+    curr_path_state = mpc.path.get_state_by_s(state[7])
+    state = model.step_and_return(state, control, curr_path_state[2], dt=mpc.dt)
 
     if debug:
         print(f"[{i}] Applying control: {control}")
@@ -87,10 +89,10 @@ for i in range(mpc.simSteps):
         state[2],
     )
 
-    x, y, h, V, beta, r, w = state
+    x, y, h, V, beta, r, w, path_dist = state
     delta, torque = control
 
-    desired_pos = mpc.find_desired_state(state, path)
+    desired_pos = mpc.path.get_state_by_s(path_dist + mpc.lookahead_distance)
     sim.draw_point(desired_pos[:2], color=(0, 255, 0))
 
     # Compute slip angles and slip ratio
@@ -104,6 +106,7 @@ for i in range(mpc.simSteps):
     sim.draw_vec(state[0:2], np.array([0, FyF * 0.5]), state[2], color=(0, 255, 0))
     sim.draw_vec(state[0:2], np.array([0, FyR * 0.5]), state[2], color=(0, 0, 255))
     sim.draw_vec(state[0:2], np.array([FxR * 0.5, 0]), state[2], color=(255, 0, 0))
+    sim.draw_vec(desired_pos[:2], np.array([1, 0]), desired_pos[2], color=(0, 255, 0))
 
     # Dynamics
     r_dot = model.compute_r_dot(FyF, FyR, delta)
@@ -129,6 +132,7 @@ for i in range(mpc.simSteps):
             "FyR": FyR,
             "alpha_F": alpha_F,
             "alpha_R": alpha_R,
+            "path_dist": path_dist,
             "steering": control[0],
             "throttle": control[1],
         }
